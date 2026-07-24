@@ -40,7 +40,8 @@ src/
   main/             Electron main (Node). Entry: main/index.ts
     ipc.ts          ipcMain handlers -> services; broadcasts script output/status.
     store/          jsonStore (fs-based, replaces ESM-only electron-store),
-                    connectionStore (CRUD), secrets (keychain).
+                    connectionStore (CRUD), workspaceStore (connection groups +
+                    active selection), secrets (keychain).
     process/        preScriptRunner — spawns/tracks/kills pre-connection scripts.
     db/             Driver interface (types.ts) + postgres.ts + mysql.ts + pool.ts
                     (connection registry, orchestrates pre-script -> connect).
@@ -57,6 +58,23 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
 - **Adding a DB engine:** implement `Driver` (`src/main/db/types.ts`), register it in
   `createDriver()` (`src/main/db/pool.ts`), add the kind to `DriverKind` in `shared/types.ts`
   and the driver `<select>` in `ConnectionForm.tsx`. In MySQL a "schema" == a database.
+- **Workspaces scope connections.** Every `ConnectionConfig` has a `workspaceId`; exactly one
+  workspace is active (`workspaces.json`) and `connections:list` defaults to it, so the sidebar
+  only ever shows the active workspace. No workspace is ever created implicitly — with none,
+  `activeWorkspaceId` is null and `WorkspaceBar` opens a non-dismissable `WorkspaceDialog`. The
+  one exception is `initStores()` (main entry, before the window opens): if connections predate
+  workspaces it makes a "Default" workspace to hold them. Deleting a workspace deletes its
+  connections; `workspaceId` is not part of `ConnectionExport`.
+- **Color lives on the workspace, never on a connection** (`Workspace.color`, swatches in
+  `renderer/src/colors.ts`). It drives the title bar and the sidebar dots.
+- **Electron has no `window.prompt`** — it throws. Use a modal (see `WorkspaceDialog`);
+  `confirm()`/`alert()` are fine.
+- **The title bar is renderer-drawn** (`TitleBar.tsx`, `titleBarStyle: 'hidden'`) so it can be
+  tinted with the active workspace's color. Keep `--titlebar-h` in `styles.css` in sync with
+  `TITLE_BAR_HEIGHT` in `main/index.ts`, and keep `-webkit-app-region: drag` on the bar (add
+  `no-drag` to anything clickable put there). macOS shows the traffic lights over it
+  (`trafficLightPosition` + the `.titlebar.mac` left padding); Windows/Linux use the controls
+  overlay, recolored through `window:setAccentColor`.
 - **Grid rows are arrays** (`unknown[][]`) aligned to `columns`; primary-key values are read
   by column index. Editing needs a PK — `TableData.editable` gates it.
 - **New IPC call:** add to the `Api` interface in `shared/types.ts`, implement the handler in

@@ -37,6 +37,14 @@ npm run typecheck  # tsc for main+preload and renderer
 npm run build      # production build into out/
 ```
 
+## Build a macOS app
+
+```bash
+npm run build:mac  # -> dist/DB Manager-<version>-arm64.dmg + dist/mac-arm64/DB Manager.app
+```
+
+Ad-hoc signed (no Apple Developer ID), so the build only runs on the machine that made it.
+
 ## Layout
 
 ```

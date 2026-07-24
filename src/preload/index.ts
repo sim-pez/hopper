@@ -9,12 +9,21 @@ import type {
   SavedQueryInput,
   ScriptOutput,
   TableDataOptions,
-  UpdateCellPayload
+  UpdateCellPayload,
+  WorkspaceInput
 } from '../shared/types'
 
 const api: Api = {
+  workspaces: {
+    list: () => ipcRenderer.invoke('workspaces:list'),
+    save: (input: WorkspaceInput) => ipcRenderer.invoke('workspaces:save', input),
+    delete: (id: string) => ipcRenderer.invoke('workspaces:delete', id),
+    getActive: () => ipcRenderer.invoke('workspaces:getActive'),
+    setActive: (id: string) => ipcRenderer.invoke('workspaces:setActive', id)
+  },
   connections: {
-    list: () => ipcRenderer.invoke('connections:list'),
+    list: (workspaceId?: string) => ipcRenderer.invoke('connections:list', workspaceId),
+    move: (id: string, workspaceId: string) => ipcRenderer.invoke('connections:move', id, workspaceId),
     save: (input: ConnectionInput) => ipcRenderer.invoke('connections:save', input),
     delete: (id: string) => ipcRenderer.invoke('connections:delete', id),
     duplicate: (id: string) => ipcRenderer.invoke('connections:duplicate', id),
@@ -60,7 +69,10 @@ const api: Api = {
     clear: (key: string) => ipcRenderer.invoke('history:clear', key)
   },
   system: {
-    listSshHosts: () => ipcRenderer.invoke('system:listSshHosts')
+    listSshHosts: () => ipcRenderer.invoke('system:listSshHosts'),
+    platform: process.platform,
+    setAccentColor: (color: string, symbolColor: string) =>
+      ipcRenderer.invoke('window:setAccentColor', color, symbolColor)
   },
   savedQueries: {
     list: (connectionId: string) => ipcRenderer.invoke('queries:list', connectionId),

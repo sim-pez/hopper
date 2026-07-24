@@ -66,9 +66,45 @@ body {
   font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 }
 
+/* ---------- Title bar ---------- */
+/* The native title bar is hidden (main/index.ts) so this one can carry the
+   active workspace's color. Keep --titlebar-h in sync with TITLE_BAR_HEIGHT. */
+.app-shell {
+  --titlebar-h: 34px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.titlebar {
+  height: var(--titlebar-h);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--ease), color var(--ease);
+  -webkit-app-region: drag;
+}
+/* Room for the traffic lights, which stay on top of this bar. */
+.titlebar.mac {
+  padding-left: 84px;
+}
+
+.titlebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app {
   display: flex;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ---------- Sidebar ---------- */
@@ -80,6 +116,26 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.workspace-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .sidebar-header {
@@ -757,6 +813,20 @@ label.inline input {
 .modal h3 {
   margin: 0 0 14px;
   font-size: 15px;
+}
+/* Declared after .modal so the narrower width wins. */
+.modal.workspace-modal {
+  width: 360px;
+}
+.workspace-modal label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.workspace-modal input {
+  width: 100%;
+  margin-top: 4px;
 }
 @keyframes fade-in {
   from {

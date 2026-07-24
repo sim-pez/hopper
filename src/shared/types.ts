@@ -2,12 +2,29 @@
 
 export type DriverKind = 'postgres' | 'mysql'
 
+/** A named group of connections. Exactly one workspace is active at a time; the
+ *  sidebar only lists the active workspace's connections. */
+export interface Workspace {
+  id: string
+  name: string
+  color?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface WorkspaceInput {
+  id?: string
+  name: string
+  color?: string
+}
+
 /** Connection metadata persisted to disk. The password is NOT part of this
  *  object when persisted — it is stored separately, encrypted. */
 export interface ConnectionConfig {
   id: string
+  /** Workspace this connection belongs to. Color comes from the workspace. */
+  workspaceId: string
   name: string
-  color?: string
   driver: DriverKind
   host: string
   port: number
@@ -43,8 +60,11 @@ export interface SshDevcontainerConfig {
 }
 
 /** Draft used when creating/updating a connection from the UI. */
-export interface ConnectionInput extends Omit<ConnectionConfig, 'id' | 'createdAt' | 'updatedAt'> {
+export interface ConnectionInput
+  extends Omit<ConnectionConfig, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'> {
   id?: string
+  /** Target workspace. Defaults to the active workspace on create; ignored on update. */
+  workspaceId?: string
   /** New password. Leave undefined to keep the existing one on update. */
   password?: string
 }
@@ -59,7 +79,8 @@ export interface ConnectionView extends ConnectionConfig {
  *  it is only produced by the explicit `connections.exportConfig` call. Identity
  *  (`id`) and timestamps are omitted so an imported config can be saved as a new
  *  connection or applied onto an existing one. */
-export interface ConnectionExport extends Omit<ConnectionConfig, 'id' | 'createdAt' | 'updatedAt'> {
+export interface ConnectionExport
+  extends Omit<ConnectionConfig, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'> {
   password?: string
 }
 
@@ -193,8 +214,23 @@ export interface TestResult {
 
 /** Shape exposed on `window.api` by the preload bridge. */
 export interface Api {
+  /** Connection groups. The active workspace scopes what the sidebar shows. */
+  workspaces: {
+    list: () => Promise<Workspace[]>
+    /** Create (no id) or rename (with id). */
+    save: (input: WorkspaceInput) => Promise<Workspace>
+    /** Deletes the workspace and every connection in it. Returns the id active
+     *  afterwards, or null when it was the last workspace. */
+    delete: (id: string) => Promise<string | null>
+    /** Null until the user creates their first workspace. */
+    getActive: () => Promise<string | null>
+    setActive: (id: string) => Promise<string>
+  }
   connections: {
-    list: () => Promise<ConnectionView[]>
+    /** Connections in `workspaceId`, or in the active workspace when omitted. */
+    list: (workspaceId?: string) => Promise<ConnectionView[]>
+    /** Move a connection to another workspace. */
+    move: (id: string, workspaceId: string) => Promise<ConnectionView>
     save: (input: ConnectionInput) => Promise<ConnectionView>
     delete: (id: string) => Promise<void>
     duplicate: (id: string) => Promise<ConnectionView>
@@ -240,6 +276,10 @@ export interface Api {
   system: {
     /** Host aliases parsed from ~/.ssh/config, for the SSH + devcontainer wizard. */
     listSshHosts: () => Promise<string[]>
+    /** `process.platform`, so the renderer can leave room for macOS traffic lights. */
+    platform: string
+    /** Tint the native window controls to match the active workspace (Windows/Linux). */
+    setAccentColor: (color: string, symbolColor: string) => Promise<void>
   }
   /** Named queries saved per-connection, optionally pinned. */
   savedQueries: {

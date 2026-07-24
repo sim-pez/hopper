@@ -16,7 +16,6 @@ interface Props {
 }
 
 const DEFAULT_PORTS: Record<DriverKind, number> = { postgres: 5432, mysql: 3306 }
-const COLORS = ['#f38ba8', '#fab387', '#f9e2af', '#a6e3a1', '#89dceb', '#89b4fa', '#cba6f7', '#6c7086']
 
 const EMPTY_SSH_DEVCONTAINER: SshDevcontainerConfig = {
   sshHost: '',
@@ -33,7 +32,6 @@ const MODES: NonNullable<ConnectionInput['preConnectionMode']>[] = ['none', 'ssh
 function toExport(f: ConnectionInput): ConnectionExport {
   return {
     name: f.name,
-    color: f.color,
     driver: f.driver,
     host: f.host,
     port: f.port,
@@ -69,7 +67,7 @@ function parseExport(parsed: unknown): Partial<ConnectionInput> | null {
   const src = parsed as Record<string, unknown>
   const patch: Partial<ConnectionInput> = {}
 
-  for (const k of ['name', 'color', 'host', 'database', 'user', 'password', 'preScript', 'preScriptReadyRegex'] as const) {
+  for (const k of ['name', 'host', 'database', 'user', 'password', 'preScript', 'preScriptReadyRegex'] as const) {
     if (typeof src[k] === 'string') patch[k] = src[k] as string
   }
   for (const k of ['port', 'preScriptWaitMs'] as const) {
@@ -94,7 +92,6 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
   const initialForm: ConnectionInput = {
     id: connection?.id,
     name: connection?.name ?? '',
-    color: connection?.color ?? COLORS[5],
     driver: connection?.driver ?? 'postgres',
     host: connection?.host ?? 'localhost',
     port: connection?.port ?? DEFAULT_PORTS.postgres,
@@ -273,21 +270,6 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
               <option value="postgres">PostgreSQL</option>
               <option value="mysql">MySQL / MariaDB</option>
             </select>
-          </label>
-
-          <label>
-            Color
-            <div className="swatches">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`swatch ${form.color === c ? 'sel' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => set('color', c)}
-                />
-              ))}
-            </div>
           </label>
 
           {form.preConnectionMode !== 'ssh-devcontainer' && (

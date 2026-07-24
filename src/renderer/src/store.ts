@@ -4,7 +4,8 @@ import type {
   ConnectionStatus,
   ConnectionView,
   QueryResult,
-  ScriptOutput
+  ScriptOutput,
+  Workspace
 } from '@shared/types'
 
 export interface TableTab {
@@ -36,6 +37,11 @@ export interface ResultTab {
 export type Tab = TableTab | QueryTab | ResultTab
 
 interface AppState {
+  workspaces: Workspace[]
+  activeWorkspaceId: string | null
+  /** False until the first `refreshWorkspaces` resolves — an empty list before
+   *  that is "not loaded yet", not "no workspaces exist". */
+  workspacesLoaded: boolean
   connections: ConnectionView[]
   statuses: Record<string, ConnectionStatus>
   scriptLogs: Record<string, ScriptOutput[]>
@@ -43,6 +49,9 @@ interface AppState {
   activeTabId: string | null
   consoleConnectionId: string | null // which connection's script console is shown
 
+  refreshWorkspaces: () => Promise<void>
+  /** Switch the active workspace and reload its connections. */
+  selectWorkspace: (id: string) => Promise<void>
   refreshConnections: () => Promise<void>
   setStatus: (status: ConnectionStatus) => void
   appendLog: (out: ScriptOutput) => void
@@ -56,6 +65,9 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set, get) => ({
+  workspaces: [],
+  activeWorkspaceId: null,
+  workspacesLoaded: false,
   connections: [],
   statuses: {},
   scriptLogs: {},
@@ -63,9 +75,35 @@ export const useStore = create<AppState>((set, get) => ({
   activeTabId: null,
   consoleConnectionId: null,
 
+  refreshWorkspaces: async () => {
+    const [workspaces, activeWorkspaceId] = await Promise.all([
+      window.api.workspaces.list(),
+      window.api.workspaces.getActive()
+    ])
+    set({ workspaces, activeWorkspaceId, workspacesLoaded: true })
+  },
+
+  selectWorkspace: async (id) => {
+    await window.api.workspaces.setActive(id)
+    set({ activeWorkspaceId: id })
+    await get().refreshConnections()
+  },
+
+  // Lists the active workspace's connections, then drops any tab or console
+  // pointing at a connection that is no longer visible (deleted, or in another
+  // workspace). Connections themselves stay open in the main process.
   refreshConnections: async () => {
     const connections = await window.api.connections.list()
-    set({ connections })
+    const ids = new Set(connections.map((c) => c.id))
+    set((s) => {
+      const tabs = s.tabs.filter((t) => ids.has(t.connectionId))
+      const activeTabId = tabs.some((t) => t.id === s.activeTabId)
+        ? s.activeTabId
+        : (tabs[tabs.length - 1]?.id ?? null)
+      const consoleConnectionId =
+        s.consoleConnectionId && ids.has(s.consoleConnectionId) ? s.consoleConnectionId : null
+      return { connections, tabs, activeTabId, consoleConnectionId }
+    })
   },
 
   setStatus: (status) => set((s) => ({ statuses: { ...s.statuses, [status.id]: status } })),

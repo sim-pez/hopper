@@ -11,15 +11,28 @@ import type {
   ScriptOutput,
   TableDataOptions,
   TestResult,
-  UpdateCellPayload
+  UpdateCellPayload,
+  WorkspaceInput
 } from '@shared/types'
 import {
+  assignMissingWorkspaces,
+  countConnectionsWithoutWorkspace,
   deleteConnection,
   duplicateConnection,
   getConnection,
+  listConnectionIdsInWorkspace,
   listConnections,
+  moveConnection,
   saveConnection
 } from './store/connectionStore'
+import {
+  deleteWorkspace,
+  getActiveWorkspaceId,
+  initWorkspaces,
+  listWorkspaces,
+  saveWorkspace,
+  setActiveWorkspaceId
+} from './store/workspaceStore'
 import { getPassword } from './store/secrets'
 import { preScriptRunner } from './process/preScriptRunner'
 import { cancelQuery, connect, disconnect, getDriver, getStatus, onStatusChange } from './db/pool'
@@ -41,16 +54,52 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
+/** Back-fills `workspaceId` on connections saved before workspaces existed, creating
+ *  a "Default" workspace to hold them. Nothing is created on a fresh install — the
+ *  UI asks the user to name their first workspace. Must run before the window loads. */
+export async function initStores(): Promise<void> {
+  let activeId = await initWorkspaces()
+  const orphans = await countConnectionsWithoutWorkspace()
+  if (orphans === 0) return
+  if (!activeId) activeId = (await saveWorkspace({ name: 'Default' })).id
+  await assignMissingWorkspaces(activeId)
+}
+
 export function registerIpc(): void {
   // Forward script output and status changes to all renderer windows.
   preScriptRunner.on('output', (out: ScriptOutput) => broadcast('script:output', out))
   onStatusChange((status) => broadcast('script:status', status))
 
+  // --- Workspaces ---
+  ipcMain.handle('workspaces:list', () => listWorkspaces())
+  ipcMain.handle('workspaces:save', (_e, input: WorkspaceInput) => saveWorkspace(input))
+  ipcMain.handle('workspaces:getActive', () => getActiveWorkspaceId())
+  ipcMain.handle('workspaces:setActive', (_e, id: string) => setActiveWorkspaceId(id))
+
+  // Deleting a workspace takes its connections with it: disconnect each one (so
+  // no pre-script keeps running), then drop it along with its stored password.
+  ipcMain.handle('workspaces:delete', async (_e, id: string) => {
+    const ids = await listConnectionIdsInWorkspace(id)
+    const activeId = await deleteWorkspace(id)
+    for (const connId of ids) {
+      await disconnect(connId).catch(() => {})
+      await deleteConnection(connId)
+    }
+    return activeId
+  })
+
   // --- Connections CRUD ---
-  ipcMain.handle('connections:list', () => listConnections())
+  // With no workspace at all there is nothing to show.
+  ipcMain.handle('connections:list', async (_e, workspaceId?: string) => {
+    const scope = workspaceId ?? (await getActiveWorkspaceId())
+    return scope ? listConnections(scope) : []
+  })
   ipcMain.handle('connections:save', (_e, input: ConnectionInput) => saveConnection(input))
   ipcMain.handle('connections:delete', (_e, id: string) => deleteConnection(id))
   ipcMain.handle('connections:duplicate', (_e, id: string) => duplicateConnection(id))
+  ipcMain.handle('connections:move', (_e, id: string, workspaceId: string) =>
+    moveConnection(id, workspaceId)
+  )
 
   // Deliberate exception to "no passwords in the renderer": the export box shows
   // the whole connection, password included, so a config can be moved elsewhere.
@@ -91,6 +140,8 @@ export function registerIpc(): void {
     const cfg: ConnectionConfig = await resolvePreConnection({
       ...input,
       id: tempId,
+      // Irrelevant to a throwaway test run, but ConnectionConfig requires it.
+      workspaceId: input.workspaceId ?? '',
       driver: input.driver,
       createdAt: 0,
       updatedAt: 0
@@ -167,4 +218,13 @@ export function registerIpc(): void {
 
   // --- System ---
   ipcMain.handle('system:listSshHosts', () => listSshHosts())
+
+  // Recolor the native window controls to match the active workspace. The bar
+  // itself is renderer-drawn; this is only the Windows/Linux overlay (a no-op on
+  // macOS, where the traffic lights sit on top of the renderer's own bar).
+  ipcMain.handle('window:setAccentColor', (e, color: string, symbolColor: string) => {
+    if (process.platform === 'darwin') return
+    const win = BrowserWindow.fromWebContents(e.sender)
+    win?.setTitleBarOverlay({ color, symbolColor })
+  })
 }

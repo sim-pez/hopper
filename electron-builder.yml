@@ -1,0 +1,33 @@
+appId: com.simone.dbmanager
+productName: DB Manager
+copyright: Copyright © 2026
+
+directories:
+  buildResources: resources
+  output: dist
+
+# electron-vite emits everything the app needs into out/. Node deps (pg, mysql2,
+# xlsx) stay external, so node_modules is packed too — all three are pure JS,
+# no native rebuild required.
+files:
+  - out/**/*
+  - package.json
+
+asar: true
+
+mac:
+  icon: resources/icon.icns
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  # No Apple Developer ID: ad-hoc sign so the arm64 binary can launch locally.
+  # Hardened runtime must be off when not properly signed, or the app won't start.
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
