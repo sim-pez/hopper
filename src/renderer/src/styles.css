@@ -14,6 +14,11 @@
   --sel: #3b3f57;
   --radius: 6px;
   --ease: 120ms ease;
+  --danger-bg: #45293a;
+  --warn-bg: #3a3320;
+  --ok-bg: #26332a;
+  --on-accent: #11111b;
+  --row-deleted-bg: #3a2427;
 }
 
 * {
@@ -67,8 +72,8 @@ body {
 }
 
 /* ---------- Title bar ---------- */
-/* The native title bar is hidden (main/index.ts) so this one can carry the
-   active workspace's color. Keep --titlebar-h in sync with TITLE_BAR_HEIGHT. */
+/* The native title bar is hidden (main/index.ts). Keep --titlebar-h in sync
+   with TITLE_BAR_HEIGHT. */
 .app-shell {
   --titlebar-h: 34px;
   display: flex;
@@ -83,8 +88,9 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0 12px;
+  background: var(--panel);
+  color: var(--text-dim);
   border-bottom: 1px solid var(--border);
-  transition: background var(--ease), color var(--ease);
   -webkit-app-region: drag;
 }
 /* Room for the traffic lights, which stay on top of this bar. */
@@ -109,13 +115,38 @@ body {
 
 /* ---------- Sidebar ---------- */
 .sidebar {
-  width: 300px;
+  position: relative;
   min-width: 240px;
   background: var(--bg-alt);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
+}
+.resize-handle-x {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+.resize-handle-x:hover {
+  background: var(--accent);
+  opacity: 0.4;
+}
+.resize-handle-y {
+  height: 6px;
+  margin: -3px 0;
+  cursor: row-resize;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+.resize-handle-y:hover {
+  background: var(--accent);
+  opacity: 0.4;
 }
 
 .workspace-bar {
@@ -173,13 +204,6 @@ body {
   align-items: center;
   gap: 7px;
 }
-.conn-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.04);
-}
 .conn-name {
   flex: 1;
   text-align: left;
@@ -203,7 +227,7 @@ body {
   font-size: 9px;
   font-weight: 700;
   background: var(--warn);
-  color: #000;
+  color: var(--on-accent);
   border-radius: 3px;
   padding: 1px 4px;
   margin-left: 6px;
@@ -483,9 +507,37 @@ body {
 }
 
 /* ---------- Grid ---------- */
+.grid-relative {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 .grid-wrap {
   flex: 1;
   overflow: auto;
+}
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 30, 46, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 table.grid {
   border-collapse: collapse;
@@ -544,6 +596,7 @@ th.sortable:hover {
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: help;
 }
 .null {
   color: var(--muted);
@@ -597,11 +650,19 @@ th.sortable:hover {
 
 /* ---------- Console ---------- */
 .console {
-  height: 200px;
+  height: 260px;
+  min-height: 140px;
+  max-height: 640px;
   border-top: 1px solid var(--border);
   background: var(--bg-alt);
   display: flex;
   flex-direction: column;
+}
+/* No log output to size against — shrink to just the editor + toolbar. */
+.console.compact {
+  height: auto;
+  min-height: 0;
+  max-height: none;
 }
 .console-header {
   display: flex;
@@ -619,7 +680,7 @@ th.sortable:hover {
 }
 .running-badge {
   background: var(--accent-2);
-  color: #000;
+  color: var(--on-accent);
   border-radius: 3px;
   padding: 0 5px;
   margin-left: 8px;
@@ -685,7 +746,7 @@ button {
 }
 .mini.primary {
   background: var(--accent);
-  color: #11111b;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
@@ -747,7 +808,7 @@ button {
   color: var(--danger);
 }
 .error-bar {
-  background: #45293a;
+  background: var(--danger-bg);
   color: var(--danger);
   padding: 6px 10px;
   font-size: 12px;
@@ -862,20 +923,6 @@ label.inline input {
   align-items: flex-end;
   gap: 16px;
 }
-.swatches {
-  display: flex;
-  gap: 5px;
-}
-.swatch {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-}
-.swatch.sel {
-  border-color: var(--text);
-}
 .modal-actions {
   display: flex;
   gap: 8px;
@@ -889,11 +936,11 @@ label.inline input {
   font-size: 12px;
 }
 .test-result.ok {
-  background: #26332a;
+  background: var(--ok-bg);
   color: var(--accent-2);
 }
 .test-result.fail {
-  background: #45293a;
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -1030,6 +1077,38 @@ label.inline input {
   align-self: flex-start;
 }
 
+/* ---------- Toasts ---------- */
+.toast-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+}
+.toast {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  max-width: 360px;
+  animation: fade-in 120ms ease;
+}
+.toast-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.toast-success {
+  background: var(--ok-bg);
+  color: var(--accent-2);
+}
+.toast-info {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
 /* ---------- Column header search ---------- */
 .th-inner {
   display: inline-flex;
@@ -1057,13 +1136,13 @@ label.inline input {
 
 /* Dirty (unsaved) cells and rows staged for deletion */
 .cell.dirty {
-  background: #3a3320;
+  background: var(--warn-bg);
   box-shadow: inset 2px 0 0 var(--warn);
 }
 tr.row-deleted td {
   text-decoration: line-through;
   opacity: 0.5;
-  background: #3a2427;
+  background: var(--row-deleted-bg);
 }
 
 /* ---------- Filter bar ---------- */
@@ -1143,17 +1222,13 @@ tr.row-deleted td {
 .autocomplete li.active,
 .autocomplete li:hover {
   background: var(--accent);
-  color: #11111b;
+  color: var(--on-accent);
 }
 
 /* ---------- Query console ---------- */
-.console {
-  height: auto;
-  max-height: 320px;
-}
 .console-log {
-  flex: 0 0 auto;
-  max-height: 90px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 6px 10px;
   font-size: 12px;
@@ -1163,6 +1238,7 @@ tr.row-deleted td {
 }
 .console-sql {
   height: 96px;
+  flex: 0 0 auto;
   border-bottom: 1px solid var(--border);
 }
 .result-sql {

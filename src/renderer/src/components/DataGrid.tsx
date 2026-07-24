@@ -129,6 +129,7 @@ export function DataGrid({
                 const isEditing = editing?.r === r && editing?.c === c
                 const dirty = isDirty?.(r, c) ?? false
                 const value = row[c]
+                const text = displayValue(value)
                 return (
                   <td
                     key={c}
@@ -158,7 +159,7 @@ export function DataGrid({
                     ) : isNull(value) ? (
                       <span className="null">NULL</span>
                     ) : (
-                      <span className="cell-text">{displayValue(value)}</span>
+                      <span className="cell-text" title={text}>{text}</span>
                     )}
                   </td>
                 )

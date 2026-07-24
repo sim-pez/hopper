@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { ColumnMeta, QueryResult } from '@shared/types'
 import { useStore } from '../store'
 import { SqlEditor } from './SqlEditor'
-import { HistoryPanel } from './HistoryPanel'
 import { SavedQueriesPanel } from './SavedQueriesPanel'
+import { SaveQueryDialog } from './SaveQueryDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 import { useDbMetadata } from '../hooks/useDbMetadata'
-import { uid } from '../utils'
+import { useResizable } from '../hooks/useResizable'
+import { uid, noWhereGuard } from '../utils'
 
 interface Props {
   connectionId: string
@@ -26,22 +28,21 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
+  const [showSaveAs, setShowSaveAs] = useState(false)
+  const [pendingRun, setPendingRun] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const historyKey = `${connectionId}:__query__`
+  const [height, resizeHandle] = useResizable({ axis: 'y', min: 140, max: 640, initial: 260, invert: true })
 
   const cancel = async () => {
     await window.api.db.cancelQuery(connectionId)
   }
 
-  const save = async () => {
-    const trimmed = sql.trim()
-    if (!trimmed) return
-    const name = prompt('Name this query:')
-    if (!name) return
-    await window.api.savedQueries.save({ connectionId, name, sql: trimmed })
+  const save = async (name: string) => {
+    setShowSaveAs(false)
+    await window.api.savedQueries.save({ connectionId, name, sql: sql.trim() })
   }
 
   // Result sets open in their own tab; the console only reports non-result outcomes.
@@ -79,10 +80,7 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     throw new Error(`Unsupported command: ${verb}`)
   }
 
-  const run = async () => {
-    const trimmed = sql.trim()
-    if (!trimmed) return
-
+  const doRun = async (trimmed: string) => {
     if (trimmed.startsWith('\\')) {
       setRunning(true)
       setError(null)
@@ -95,12 +93,6 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         setRunning(false)
       }
       return
-    }
-
-    // Guard against a full-table UPDATE/DELETE with no WHERE clause.
-    if (/^\s*(update|delete)\b/i.test(trimmed) && !/\bwhere\b/i.test(trimmed)) {
-      const verb = /^\s*update/i.test(trimmed) ? 'UPDATE' : 'DELETE'
-      if (!confirm(`This ${verb} has no WHERE clause and will affect EVERY row. Run it anyway?`)) return
     }
 
     setRunning(true)
@@ -124,19 +116,27 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     }
   }
 
+  const run = async () => {
+    const trimmed = sql.trim()
+    if (!trimmed) return
+    if (!trimmed.startsWith('\\') && noWhereGuard(trimmed)) {
+      setPendingRun(trimmed)
+      return
+    }
+    await doRun(trimmed)
+  }
+
   return (
-    <div className="console">
+    <div className={`console ${logs.length > 0 ? '' : 'compact'}`} style={logs.length > 0 ? { height } : undefined}>
+      {logs.length > 0 && <div className="resize-handle-y" onMouseDown={resizeHandle.onMouseDown} />}
       <div className="console-header">
         <span>
           Query · {conn?.name ?? connectionId}
           {status?.scriptRunning && <span className="running-badge">script running</span>}
         </span>
-        <div className="console-header-right">
-          {lastMs != null && <span className="muted">{lastMs} ms</span>}
-          <button className="btn-icon" onClick={() => showConsole(null)} title="Hide">
-            ▾
-          </button>
-        </div>
+        <button className="btn-icon" onClick={() => showConsole(null)} title="Hide">
+          ▾
+        </button>
       </div>
 
       {logs.length > 0 && (
@@ -169,34 +169,38 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
           </button>
         )}
         {message && <span className="muted">{message}</span>}
+        {lastMs != null && <span className="muted">{lastMs} ms</span>}
         <div className="spacer" />
         <span className="muted">results open in a new tab</span>
-        <button className="mini" title="Save this query for reuse" onClick={save}>
+        <button className="mini" title="Save this query for reuse" onClick={() => setShowSaveAs(true)} disabled={!sql.trim()}>
           ☆ Save
         </button>
         <button className="mini" title="Saved queries" onClick={() => setShowSaved(true)}>
           Saved
         </button>
-        <button className="mini" title="Past queries run on this connection" onClick={() => setShowHistory(true)}>
-          History
-        </button>
       </div>
 
       {error && <div className="error-bar">{error}</div>}
 
-      {showHistory && (
-        <HistoryPanel
-          tableKey={historyKey}
-          title={conn?.name ?? connectionId}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
       {showSaved && (
         <SavedQueriesPanel
           connectionId={connectionId}
           title={conn?.name ?? connectionId}
           onClose={() => setShowSaved(false)}
           onSelect={setSql}
+        />
+      )}
+      {showSaveAs && <SaveQueryDialog onCancel={() => setShowSaveAs(false)} onSave={save} />}
+      {pendingRun && (
+        <ConfirmDialog
+          message={`This ${noWhereGuard(pendingRun)} has no WHERE clause and will affect EVERY row. Run it anyway?`}
+          confirmLabel="Run anyway"
+          onCancel={() => setPendingRun(null)}
+          onConfirm={() => {
+            const trimmed = pendingRun
+            setPendingRun(null)
+            doRun(trimmed)
+          }}
         />
       )}
     </div>

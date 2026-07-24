@@ -7,7 +7,6 @@ export type DriverKind = 'postgres' | 'mysql'
 export interface Workspace {
   id: string
   name: string
-  color?: string
   createdAt: number
   updatedAt: number
 }
@@ -15,14 +14,13 @@ export interface Workspace {
 export interface WorkspaceInput {
   id?: string
   name: string
-  color?: string
 }
 
 /** Connection metadata persisted to disk. The password is NOT part of this
  *  object when persisted — it is stored separately, encrypted. */
 export interface ConnectionConfig {
   id: string
-  /** Workspace this connection belongs to. Color comes from the workspace. */
+  /** Workspace this connection belongs to. */
   workspaceId: string
   name: string
   driver: DriverKind
@@ -115,6 +113,8 @@ export interface TableData extends QueryResult {
   editable: boolean
   limit: number
   offset: number
+  /** Total rows matching the current filters, ignoring limit/offset. */
+  totalRows: number
 }
 
 export interface TableRef {
@@ -229,8 +229,6 @@ export interface Api {
   connections: {
     /** Connections in `workspaceId`, or in the active workspace when omitted. */
     list: (workspaceId?: string) => Promise<ConnectionView[]>
-    /** Move a connection to another workspace. */
-    move: (id: string, workspaceId: string) => Promise<ConnectionView>
     save: (input: ConnectionInput) => Promise<ConnectionView>
     delete: (id: string) => Promise<void>
     duplicate: (id: string) => Promise<ConnectionView>
@@ -278,8 +276,6 @@ export interface Api {
     listSshHosts: () => Promise<string[]>
     /** `process.platform`, so the renderer can leave room for macOS traffic lights. */
     platform: string
-    /** Tint the native window controls to match the active workspace (Windows/Linux). */
-    setAccentColor: (color: string, symbolColor: string) => Promise<void>
   }
   /** Named queries saved per-connection, optionally pinned. */
   savedQueries: {

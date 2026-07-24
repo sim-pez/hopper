@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { ColumnMeta } from '@shared/types'
 import { parseEdit } from '../utils'
+import { Modal } from './Modal'
+import { showToast } from '../toast'
 
 interface Props {
   columns: ColumnMeta[]
@@ -23,7 +25,7 @@ export function InsertRowDialog({ columns, onClose, onInsert }: Props): JSX.Elem
       }
       await onInsert(values)
     } catch (e) {
-      alert(`Insert failed: ${e}`)
+      showToast(`Insert failed: ${e}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -36,8 +38,7 @@ export function InsertRowDialog({ columns, onClose, onInsert }: Props): JSX.Elem
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal insert-modal" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} className="insert-modal">
         <div className="insert-header">
           <div>
             <h3>Insert row</h3>
@@ -96,7 +97,6 @@ export function InsertRowDialog({ columns, onClose, onInsert }: Props): JSX.Elem
             {saving ? 'Inserting…' : 'Insert row'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

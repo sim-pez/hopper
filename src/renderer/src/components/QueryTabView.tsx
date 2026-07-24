@@ -4,10 +4,13 @@ import { useStore } from '../store'
 import type { QueryTab } from '../store'
 import { DataGrid } from './DataGrid'
 import { HistoryPanel } from './HistoryPanel'
+import { LoadingOverlay } from './LoadingOverlay'
 import { SavedQueriesPanel } from './SavedQueriesPanel'
+import { SaveQueryDialog } from './SaveQueryDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 import { SqlEditor } from './SqlEditor'
 import { useDbMetadata } from '../hooks/useDbMetadata'
-import { downloadCsv, downloadXlsx } from '../utils'
+import { downloadCsv, downloadXlsx, noWhereGuard } from '../utils'
 
 interface Props {
   tab: QueryTab
@@ -24,13 +27,13 @@ export function QueryTabView({ tab }: Props): JSX.Element {
   const [running, setRunning] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
+  const [showSaveAs, setShowSaveAs] = useState(false)
+  const [pendingRun, setPendingRun] = useState<string | null>(null)
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx')
 
   const historyKey = `${tab.connectionId}:__query__`
 
-  const run = async () => {
-    const trimmed = sql.trim()
-    if (!trimmed) return
+  const doRun = async (trimmed: string) => {
     setRunning(true)
     setError(null)
     try {
@@ -44,16 +47,23 @@ export function QueryTabView({ tab }: Props): JSX.Element {
     }
   }
 
+  const run = async () => {
+    const trimmed = sql.trim()
+    if (!trimmed) return
+    if (noWhereGuard(trimmed)) {
+      setPendingRun(trimmed)
+      return
+    }
+    await doRun(trimmed)
+  }
+
   const cancel = async () => {
     await window.api.db.cancelQuery(tab.connectionId)
   }
 
-  const save = async () => {
-    const trimmed = sql.trim()
-    if (!trimmed) return
-    const name = prompt('Name this query:')
-    if (!name) return
-    await window.api.savedQueries.save({ connectionId: tab.connectionId, name, sql: trimmed })
+  const save = async (name: string) => {
+    setShowSaveAs(false)
+    await window.api.savedQueries.save({ connectionId: tab.connectionId, name, sql: sql.trim() })
   }
 
   const doExport = () => {
@@ -104,7 +114,7 @@ export function QueryTabView({ tab }: Props): JSX.Element {
               </button>
             </>
           )}
-          <button className="mini" title="Save this query for reuse" onClick={save}>
+          <button className="mini" title="Save this query for reuse" onClick={() => setShowSaveAs(true)} disabled={!sql.trim()}>
             ☆ Save
           </button>
           <button className="mini" title="Saved queries" onClick={() => setShowSaved(true)}>
@@ -118,7 +128,12 @@ export function QueryTabView({ tab }: Props): JSX.Element {
 
       {error && <div className="error-bar">{error}</div>}
 
-      {result && <DataGrid columns={result.columns} rows={result.rows} />}
+      {result && (
+        <div className="grid-relative">
+          <LoadingOverlay show={running} />
+          <DataGrid columns={result.columns} rows={result.rows} />
+        </div>
+      )}
 
       {showHistory && (
         <HistoryPanel tableKey={historyKey} title={tab.title} onClose={() => setShowHistory(false)} />
@@ -129,6 +144,19 @@ export function QueryTabView({ tab }: Props): JSX.Element {
           title={tab.title}
           onClose={() => setShowSaved(false)}
           onSelect={setSql}
+        />
+      )}
+      {showSaveAs && <SaveQueryDialog onCancel={() => setShowSaveAs(false)} onSave={save} />}
+      {pendingRun && (
+        <ConfirmDialog
+          message={`This ${noWhereGuard(pendingRun)} has no WHERE clause and will affect EVERY row. Run it anyway?`}
+          confirmLabel="Run anyway"
+          onCancel={() => setPendingRun(null)}
+          onConfirm={() => {
+            const trimmed = pendingRun
+            setPendingRun(null)
+            doRun(trimmed)
+          }}
         />
       )}
     </div>

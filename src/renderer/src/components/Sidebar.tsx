@@ -3,6 +3,8 @@ import type { ConnectionView } from '@shared/types'
 import { useStore } from '../store'
 import { SchemaTree } from './SchemaTree'
 import { WorkspaceBar } from './WorkspaceBar'
+import { ConfirmDialog } from './ConfirmDialog'
+import { useResizable } from '../hooks/useResizable'
 
 interface Props {
   onNew: () => void
@@ -10,21 +12,12 @@ interface Props {
 }
 
 export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
-  const {
-    connections,
-    statuses,
-    workspaces,
-    activeWorkspaceId,
-    refreshConnections,
-    setStatus,
-    showConsole,
-    stateOf,
-    clearLog
-  } = useStore()
-  // Connections have no color of their own — they take the workspace's.
-  const workspaceColor = workspaces.find((w) => w.id === activeWorkspaceId)?.color || '#6c7086'
+  const { connections, statuses, workspaces, refreshConnections, setStatus, showConsole, stateOf, clearLog } =
+    useStore()
   const [busy, setBusy] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<ConnectionView | null>(null)
+  const [width, resizeHandle] = useResizable({ axis: 'x', min: 240, max: 560, initial: 300 })
 
   const connect = async (id: string) => {
     setBusy(id)
@@ -50,7 +43,7 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
   }
 
   const remove = async (c: ConnectionView) => {
-    if (!confirm(`Delete connection "${c.name}"?`)) return
+    setRemoving(null)
     if (stateOf(c.id) === 'connected') await window.api.db.disconnect(c.id)
     await window.api.connections.delete(c.id)
     refreshConnections()
@@ -61,17 +54,9 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
     refreshConnections()
   }
 
-  // Moving a connection out of the active workspace also removes it from the
-  // list, so its tabs are pruned by refreshConnections.
-  const move = async (c: ConnectionView, workspaceId: string) => {
-    if (workspaceId === c.workspaceId) return
-    if (stateOf(c.id) === 'connected') await window.api.db.disconnect(c.id)
-    await window.api.connections.move(c.id, workspaceId)
-    refreshConnections()
-  }
-
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ width }}>
+      <div className="resize-handle-x" onMouseDown={resizeHandle.onMouseDown} />
       <WorkspaceBar />
       <div className="sidebar-header">
         <span>Connections</span>
@@ -95,7 +80,6 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
           return (
             <div key={c.id} className={`conn-item ${connected ? 'connected' : ''}`}>
               <div className="conn-row">
-                <span className="conn-dot" style={{ background: workspaceColor }} />
                 <button
                   className="conn-name"
                   onClick={() => connected && setExpanded(isOpen ? null : c.id)}
@@ -117,24 +101,7 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
                     {busy === c.id ? 'Connecting…' : 'Connect'}
                   </button>
                 )}
-                <button className="mini" title="Query console & script log" onClick={() => showConsole(c.id)}>
-                  Console
-                </button>
                 <span className="spacer" />
-                {workspaces.length > 1 && (
-                  <select
-                    className="mini-select"
-                    title="Move to workspace"
-                    value={c.workspaceId}
-                    onChange={(e) => move(c, e.target.value)}
-                  >
-                    {workspaces.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 <div className="icon-group">
                   <button className="icon-btn-sm" title="Edit connection" onClick={() => onEdit(c)}>
                     ✎
@@ -142,7 +109,7 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
                   <button className="icon-btn-sm" title="Duplicate connection" onClick={() => duplicate(c.id)}>
                     ⧉
                   </button>
-                  <button className="icon-btn-sm danger" title="Delete connection" onClick={() => remove(c)}>
+                  <button className="icon-btn-sm danger" title="Delete connection" onClick={() => setRemoving(c)}>
                     ✕
                   </button>
                 </div>
@@ -153,6 +120,14 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
           )
         })}
       </div>
+      {removing && (
+        <ConfirmDialog
+          message={`Delete connection "${removing.name}"?`}
+          confirmLabel="Delete"
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => remove(removing)}
+        />
+      )}
     </aside>
   )
 }

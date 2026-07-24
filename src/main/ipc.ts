@@ -22,7 +22,6 @@ import {
   getConnection,
   listConnectionIdsInWorkspace,
   listConnections,
-  moveConnection,
   saveConnection
 } from './store/connectionStore'
 import {
@@ -97,9 +96,6 @@ export function registerIpc(): void {
   ipcMain.handle('connections:save', (_e, input: ConnectionInput) => saveConnection(input))
   ipcMain.handle('connections:delete', (_e, id: string) => deleteConnection(id))
   ipcMain.handle('connections:duplicate', (_e, id: string) => duplicateConnection(id))
-  ipcMain.handle('connections:move', (_e, id: string, workspaceId: string) =>
-    moveConnection(id, workspaceId)
-  )
 
   // Deliberate exception to "no passwords in the renderer": the export box shows
   // the whole connection, password included, so a config can be moved elsewhere.
@@ -218,13 +214,4 @@ export function registerIpc(): void {
 
   // --- System ---
   ipcMain.handle('system:listSshHosts', () => listSshHosts())
-
-  // Recolor the native window controls to match the active workspace. The bar
-  // itself is renderer-drawn; this is only the Windows/Linux overlay (a no-op on
-  // macOS, where the traffic lights sit on top of the renderer's own bar).
-  ipcMain.handle('window:setAccentColor', (e, color: string, symbolColor: string) => {
-    if (process.platform === 'darwin') return
-    const win = BrowserWindow.fromWebContents(e.sender)
-    win?.setTitleBarOverlay({ color, symbolColor })
-  })
 }

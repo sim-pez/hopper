@@ -123,10 +123,15 @@ export class PostgresDriver implements Driver {
       : ''
     const limitP = `$${params.length + 1}`
     const offsetP = `$${params.length + 2}`
+    const countParams = [...params]
     params.push(opts.limit, opts.offset)
     const sql = `SELECT * FROM ${this.qualified(schema, table)}${where}${order} LIMIT ${limitP} OFFSET ${offsetP}`
+    const countSql = `SELECT COUNT(*) FROM ${this.qualified(schema, table)}${where}`
     const started = Date.now()
-    const res = await this.pool.query({ text: sql, values: params, rowMode: 'array' })
+    const [res, countRes] = await Promise.all([
+      this.pool.query({ text: sql, values: params, rowMode: 'array' }),
+      this.pool.query(countSql, countParams)
+    ])
     const columns: ColumnMeta[] = res.fields.map((f) => ({ name: f.name }))
     return {
       schema,
@@ -134,6 +139,7 @@ export class PostgresDriver implements Driver {
       columns,
       rows: res.rows as unknown[][],
       rowCount: res.rowCount ?? res.rows.length,
+      totalRows: Number(countRes.rows[0].count),
       primaryKeys: pks,
       editable: !this.readOnly && pks.length > 0,
       limit: opts.limit,

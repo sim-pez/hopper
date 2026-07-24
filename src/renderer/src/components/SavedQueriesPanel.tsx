@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SavedQuery } from '@shared/types'
+import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface Props {
   connectionId: string
@@ -13,6 +15,7 @@ interface Props {
 export function SavedQueriesPanel({ connectionId, title, onClose, onSelect }: Props): JSX.Element {
   const [entries, setEntries] = useState<SavedQuery[]>([])
   const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState<SavedQuery | null>(null)
 
   const refresh = () => window.api.savedQueries.list(connectionId).then(setEntries)
 
@@ -28,14 +31,14 @@ export function SavedQueriesPanel({ connectionId, title, onClose, onSelect }: Pr
   }
 
   const remove = async (q: SavedQuery) => {
-    if (!confirm(`Delete saved query "${q.name}"?`)) return
+    setRemoving(null)
     await window.api.savedQueries.delete(q.id)
     refresh()
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <>
+    <Modal onClose={onClose}>
         <h3>Saved queries · {title}</h3>
         <p className="hint">{entries.length} saved quer{entries.length === 1 ? 'y' : 'ies'}.</p>
 
@@ -73,7 +76,7 @@ export function SavedQueriesPanel({ connectionId, title, onClose, onSelect }: Pr
                 >
                   ↩
                 </button>
-                <button className="icon-btn-sm danger" title="Delete" onClick={() => remove(q)}>
+                <button className="icon-btn-sm danger" title="Delete" onClick={() => setRemoving(q)}>
                   ✕
                 </button>
               </div>
@@ -87,7 +90,15 @@ export function SavedQueriesPanel({ connectionId, title, onClose, onSelect }: Pr
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
+    {removing && (
+      <ConfirmDialog
+        message={`Delete saved query "${removing.name}"?`}
+        confirmLabel="Delete"
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => remove(removing)}
+      />
+    )}
+    </>
   )
 }

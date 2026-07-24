@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { QueryHistoryEntry } from '@shared/types'
+import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface Props {
   /** Opaque history bucket key, e.g. `${connectionId}:${schema}:${table}` or `${connectionId}:__query__`. */
@@ -24,6 +26,7 @@ export function HistoryPanel({ tableKey, title, onClose }: Props): JSX.Element {
   const [entries, setEntries] = useState<QueryHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  const [confirmingClear, setConfirmingClear] = useState(false)
 
   useEffect(() => {
     window.api.history
@@ -33,7 +36,7 @@ export function HistoryPanel({ tableKey, title, onClose }: Props): JSX.Element {
   }, [tableKey])
 
   const clear = async () => {
-    if (!confirm('Clear query history for this table?')) return
+    setConfirmingClear(false)
     await window.api.history.clear(tableKey)
     setEntries([])
   }
@@ -45,8 +48,8 @@ export function HistoryPanel({ tableKey, title, onClose }: Props): JSX.Element {
   }, [entries, filter])
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <>
+    <Modal onClose={onClose}>
         <h3>History · {title}</h3>
         <p className="hint">{entries.length} statement{entries.length === 1 ? '' : 's'} recorded.</p>
 
@@ -85,7 +88,11 @@ export function HistoryPanel({ tableKey, title, onClose }: Props): JSX.Element {
           ))}
         </div>
         <div className="modal-actions">
-          <button className="mini danger" onClick={clear} disabled={loading || entries.length === 0}>
+          <button
+            className="mini danger"
+            onClick={() => setConfirmingClear(true)}
+            disabled={loading || entries.length === 0}
+          >
             Clear history
           </button>
           <div className="spacer" />
@@ -93,7 +100,15 @@ export function HistoryPanel({ tableKey, title, onClose }: Props): JSX.Element {
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
+    {confirmingClear && (
+      <ConfirmDialog
+        message="Clear query history for this table?"
+        confirmLabel="Clear"
+        onCancel={() => setConfirmingClear(false)}
+        onConfirm={clear}
+      />
+    )}
+    </>
   )
 }

@@ -23,7 +23,6 @@ const api: Api = {
   },
   connections: {
     list: (workspaceId?: string) => ipcRenderer.invoke('connections:list', workspaceId),
-    move: (id: string, workspaceId: string) => ipcRenderer.invoke('connections:move', id, workspaceId),
     save: (input: ConnectionInput) => ipcRenderer.invoke('connections:save', input),
     delete: (id: string) => ipcRenderer.invoke('connections:delete', id),
     duplicate: (id: string) => ipcRenderer.invoke('connections:duplicate', id),
@@ -70,9 +69,7 @@ const api: Api = {
   },
   system: {
     listSshHosts: () => ipcRenderer.invoke('system:listSshHosts'),
-    platform: process.platform,
-    setAccentColor: (color: string, symbolColor: string) =>
-      ipcRenderer.invoke('window:setAccentColor', color, symbolColor)
+    platform: process.platform
   },
   savedQueries: {
     list: (connectionId: string) => ipcRenderer.invoke('queries:list', connectionId),

@@ -62,10 +62,10 @@ export async function saveWorkspace(input: WorkspaceInput): Promise<Workspace> {
     if (input.id) {
       const idx = d.workspaces.findIndex((w) => w.id === input.id)
       if (idx === -1) throw new Error(`Workspace ${input.id} not found`)
-      saved = { ...d.workspaces[idx], name, color: input.color, updatedAt: now }
+      saved = { ...d.workspaces[idx], name, updatedAt: now }
       d.workspaces[idx] = saved
     } else {
-      saved = { id: randomUUID(), name, color: input.color, createdAt: now, updatedAt: now }
+      saved = { id: randomUUID(), name, createdAt: now, updatedAt: now }
       d.workspaces.push(saved)
       // The very first workspace becomes active straight away.
       if (!d.activeWorkspaceId) d.activeWorkspaceId = saved.id

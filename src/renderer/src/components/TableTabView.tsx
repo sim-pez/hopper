@@ -5,7 +5,9 @@ import { DataGrid } from './DataGrid'
 import { InsertRowDialog } from './InsertRowDialog'
 import { ConfirmChangesDialog } from './ConfirmChangesDialog'
 import { HistoryPanel } from './HistoryPanel'
+import { LoadingOverlay } from './LoadingOverlay'
 import { downloadXlsx, parseEdit, sqlLiteral } from '../utils'
+import { showToast } from '../toast'
 
 interface Props {
   tab: TableTab
@@ -130,7 +132,7 @@ export function TableTabView({ tab }: Props): JSX.Element {
     try {
       setPreview(await window.api.db.previewChanges(tab.connectionId, payload))
     } catch (e) {
-      alert(`Could not build preview: ${e}`)
+      showToast(`Could not build preview: ${e}`, 'error')
     }
   }
 
@@ -144,7 +146,7 @@ export function TableTabView({ tab }: Props): JSX.Element {
       setPreview(null)
       await load()
     } catch (e) {
-      alert(`Save failed: ${e}`)
+      showToast(`Save failed: ${e}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -202,7 +204,7 @@ export function TableTabView({ tab }: Props): JSX.Element {
           ◀ Prev
         </button>
         <span className="page-info">
-          rows {offset + 1}–{offset + rows.length}
+          rows {offset + 1}–{offset + rows.length} of {data?.totalRows ?? '…'}
         </span>
         <button
           className="mini"
@@ -300,18 +302,21 @@ export function TableTabView({ tab }: Props): JSX.Element {
       {error && <div className="error-bar">{error}</div>}
 
       {data && (
-        <DataGrid
-          columns={data.columns}
-          rows={rows}
-          editable={data.editable}
-          onCommitCell={onCommitCell}
-          onDeleteRow={data.editable ? onDeleteRow : undefined}
-          onSort={onSort}
-          sortState={sort}
-          onSearchColumn={addFilter}
-          isDirty={isDirty}
-          isDeleted={isDeleted}
-        />
+        <div className="grid-relative">
+          <LoadingOverlay show={loading} />
+          <DataGrid
+            columns={data.columns}
+            rows={rows}
+            editable={data.editable}
+            onCommitCell={onCommitCell}
+            onDeleteRow={data.editable ? onDeleteRow : undefined}
+            onSort={onSort}
+            sortState={sort}
+            onSearchColumn={addFilter}
+            isDirty={isDirty}
+            isDeleted={isDeleted}
+          />
+        </div>
       )}
 
       {showInsert && data && (

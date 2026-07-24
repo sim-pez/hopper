@@ -8,6 +8,7 @@ import { QueryTabView } from './components/QueryTabView'
 import { ResultTabView } from './components/ResultTabView'
 import { ScriptConsole } from './components/ScriptConsole'
 import { TitleBar } from './components/TitleBar'
+import { ToastHost } from './components/ToastHost'
 import type { ConnectionView } from '@shared/types'
 
 export function App(): JSX.Element {
@@ -59,6 +60,7 @@ export function App(): JSX.Element {
           }}
         />
       )}
+      <ToastHost />
     </div>
   )
 }

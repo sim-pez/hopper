@@ -70,6 +70,13 @@ export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+/** Returns the offending verb if `sql` is a WHERE-less UPDATE/DELETE that would
+ *  affect every row, else null. */
+export function noWhereGuard(sql: string): 'UPDATE' | 'DELETE' | null {
+  if (!/^\s*(update|delete)\b/i.test(sql) || /\bwhere\b/i.test(sql)) return null
+  return /^\s*update/i.test(sql) ? 'UPDATE' : 'DELETE'
+}
+
 /** Render a value as a SQL literal for DISPLAY ONLY (history entries). */
 export function sqlLiteral(v: unknown): string {
   if (v === null || v === undefined) return 'NULL'

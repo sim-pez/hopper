@@ -8,6 +8,8 @@ import type {
   TestResult
 } from '@shared/types'
 import { buildSshDevcontainerScript, defaultReadyRegex } from '@shared/sshDevcontainerScript'
+import { Modal } from './Modal'
+import { showToast } from '../toast'
 
 interface Props {
   connection: ConnectionView | null
@@ -225,7 +227,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     try {
       onSaved(await save())
     } catch (e) {
-      alert(`Save failed: ${e}`)
+      showToast(`Save failed: ${e}`, 'error')
     } finally {
       setSaving(false)
     }
@@ -247,8 +249,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose}>
         <h3>{editing ? 'Edit connection' : 'New connection'}</h3>
 
         <div className="form-grid">
@@ -457,7 +458,6 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

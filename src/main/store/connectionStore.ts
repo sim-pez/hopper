@@ -79,17 +79,6 @@ export async function deleteConnection(id: string): Promise<void> {
   await deletePassword(id)
 }
 
-export async function moveConnection(id: string, workspaceId: string): Promise<ConnectionView> {
-  let moved: ConnectionConfig
-  await store.update((d) => {
-    const idx = d.connections.findIndex((c) => c.id === id)
-    if (idx === -1) throw new Error(`Connection ${id} not found`)
-    moved = { ...d.connections[idx], workspaceId, updatedAt: Date.now() }
-    d.connections[idx] = moved
-  })
-  return toView(moved!)
-}
-
 /** Ids of the connections in a workspace, for tearing them down before deletion. */
 export async function listConnectionIdsInWorkspace(workspaceId: string): Promise<string[]> {
   const list = await store.get('connections')

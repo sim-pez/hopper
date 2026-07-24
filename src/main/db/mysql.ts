@@ -123,14 +123,15 @@ export class MysqlDriver implements Driver {
     const order = opts.orderBy
       ? ` ORDER BY ${quoteIdent(opts.orderBy.column)} ${opts.orderBy.desc ? 'DESC' : 'ASC'}`
       : ''
+    const countParams = [...params]
     params.push(opts.limit, opts.offset)
     const sql = `SELECT * FROM ${this.qualified(schema, table)}${where}${order} LIMIT ? OFFSET ?`
+    const countSql = `SELECT COUNT(*) AS count FROM ${this.qualified(schema, table)}${where}`
     const started = Date.now()
-    const [rows, fields] = await this.pool.query<mysql.RowDataPacket[]>({
-      sql,
-      values: params,
-      rowsAsArray: true
-    })
+    const [[rows, fields], [countRows]] = await Promise.all([
+      this.pool.query<mysql.RowDataPacket[]>({ sql, values: params, rowsAsArray: true }),
+      this.pool.query<mysql.RowDataPacket[]>(countSql, countParams)
+    ])
     const columns: ColumnMeta[] = (fields ?? []).map((f) => ({ name: f.name }))
     return {
       schema,
@@ -138,6 +139,7 @@ export class MysqlDriver implements Driver {
       columns,
       rows: rows as unknown[][],
       rowCount: rows.length,
+      totalRows: Number(countRows[0].count),
       primaryKeys: pks,
       editable: !this.readOnly && pks.length > 0,
       limit: opts.limit,
