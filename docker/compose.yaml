@@ -1,0 +1,42 @@
+name: db-manager-testdata
+
+# Two throwaway databases seeded with random data to exercise the app.
+# Postgres  -> localhost:55432  (user: demo / pass: demo / db: shop)
+# MySQL     -> localhost:33060  (user: demo / pass: demo / db: shop)
+#
+#   docker compose -f docker/compose.yaml up -d
+#   docker compose -f docker/compose.yaml down -v   # -v wipes the seeded data
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: shop
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo
+      MYSQL_DATABASE: shop
+    ports:
+      - "33060:3306"
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
