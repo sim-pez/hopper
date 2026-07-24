@@ -5,7 +5,7 @@ import { DataGrid } from './DataGrid'
 import { InsertRowDialog } from './InsertRowDialog'
 import { ConfirmChangesDialog } from './ConfirmChangesDialog'
 import { HistoryPanel } from './HistoryPanel'
-import { downloadText, parseEdit, sqlLiteral, toCsv } from '../utils'
+import { downloadXlsx, parseEdit, sqlLiteral } from '../utils'
 
 interface Props {
   tab: TableTab
@@ -184,22 +184,37 @@ export function TableTabView({ tab }: Props): JSX.Element {
   return (
     <div className="tab-view">
       <div className="toolbar">
-        <button className="mini" onClick={load} disabled={loading}>
+        <button
+          className="mini"
+          title="Reload data (discards unsaved edits)"
+          onClick={load}
+          disabled={loading}
+        >
           ↻ Refresh
         </button>
-        <span className="sep" />
-        <button className="mini" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>
+
+        <button
+          className="mini"
+          title="Previous page"
+          disabled={offset === 0 || loading}
+          onClick={() => setOffset(Math.max(0, offset - limit))}
+        >
           ◀ Prev
         </button>
         <span className="page-info">
           rows {offset + 1}–{offset + rows.length}
         </span>
-        <button className="mini" disabled={rows.length < limit || loading} onClick={() => setOffset(offset + limit)}>
+        <button
+          className="mini"
+          title="Next page"
+          disabled={rows.length < limit || loading}
+          onClick={() => setOffset(offset + limit)}
+        >
           Next ▶
         </button>
         <label className="inline">
           Limit
-          <select value={limit} onChange={(e) => { setOffset(0); setLimit(Number(e.target.value)) }}>
+          <select className="limit-select" value={limit} onChange={(e) => { setOffset(0); setLimit(Number(e.target.value)) }}>
             {LIMITS.map((l) => (
               <option key={l} value={l}>
                 {l}
@@ -207,10 +222,12 @@ export function TableTabView({ tab }: Props): JSX.Element {
             ))}
           </select>
         </label>
-        <span className="sep" />
+
+        <div className="spacer" />
+
         {data?.editable ? (
-          <button className="mini primary" onClick={() => setShowInsert(true)}>
-            ＋ Row
+          <button className="mini outline" onClick={() => setShowInsert(true)}>
+            + Add row
           </button>
         ) : (
           <span className="ro-note" title="Editing needs a primary key (or connection is read-only)">
@@ -218,22 +235,31 @@ export function TableTabView({ tab }: Props): JSX.Element {
           </span>
         )}
         {data?.editable && pending && (
-          <>
+          <div className="toolbar-group">
             <button className="mini primary" onClick={onSave} disabled={saving}>
-              💾 Save ({Object.keys(edits).length + deletes.size})
+              Save
+              <span className="count-badge">{Object.keys(edits).length + deletes.size}</span>
             </button>
             <button className="mini" onClick={discard} disabled={saving}>
               Discard
             </button>
-          </>
+          </div>
         )}
-        <button className="mini" disabled={!data} onClick={() => data && downloadText(`${tab.table}.csv`, toCsv(data.columns, rows))}>
-          Export CSV
+
+        <div className="spacer" />
+
+        <button
+          className="mini"
+          title="Download visible rows as an Excel file"
+          disabled={!data}
+          onClick={() => data && downloadXlsx(`${tab.table}.xlsx`, data.columns, rows)}
+        >
+          Export XLSX
         </button>
         <button className="mini" title="Query history for this table" onClick={() => setShowHistory(true)}>
-          🕘 History
+          History
         </button>
-        <div className="spacer" />
+
         {data && <span className="muted">{data.durationMs} ms</span>}
       </div>
 

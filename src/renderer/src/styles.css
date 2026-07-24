@@ -12,6 +12,8 @@
   --danger: #f38ba8;
   --warn: #fab387;
   --sel: #3b3f57;
+  --radius: 6px;
+  --ease: 120ms ease;
 }
 
 * {
@@ -28,10 +30,36 @@ body,
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
+  line-height: 1.45;
   color: var(--text);
   background: var(--bg);
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Slim dark scrollbars everywhere, instead of the OS default. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--panel-2);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sel);
+  background-clip: padding-box;
+}
+
+/* Consistent, visible keyboard-focus ring without cluttering mouse use. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .mono {
@@ -58,36 +86,43 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 11px 14px;
   font-weight: 600;
+  letter-spacing: 0.2px;
   border-bottom: 1px solid var(--border);
 }
 
 .conn-list {
   overflow-y: auto;
   flex: 1;
-  padding: 6px;
+  padding: 8px;
 }
 
 .conn-item {
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: var(--radius);
+  padding: 8px;
   margin-bottom: 4px;
+  border: 1px solid transparent;
+  transition: background var(--ease), border-color var(--ease);
 }
 .conn-item:hover {
   background: var(--panel);
+}
+.conn-item.connected {
+  border-color: var(--border);
 }
 
 .conn-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .conn-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   flex: 0 0 auto;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.04);
 }
 .conn-name {
   flex: 1;
@@ -96,22 +131,27 @@ body {
   border: none;
   color: var(--text);
   font-size: 13px;
+  padding: 2px 0;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tri {
+  display: inline-block;
+  width: 10px;
   color: var(--muted);
   margin-right: 3px;
 }
 .ro-badge {
   font-size: 9px;
+  font-weight: 700;
   background: var(--warn);
   color: #000;
   border-radius: 3px;
-  padding: 0 3px;
-  margin-left: 5px;
+  padding: 1px 4px;
+  margin-left: 6px;
+  vertical-align: 1px;
 }
 
 .state-dot {
@@ -133,9 +173,38 @@ body {
 
 .conn-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+.conn-actions .spacer {
+  flex: 1;
+}
+.icon-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.icon-btn-sm {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--ease), color var(--ease);
+}
+.icon-btn-sm:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.icon-btn-sm.danger:hover {
+  color: var(--danger);
 }
 
 .conn-error {
@@ -199,24 +268,51 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 8px 0 10px;
   border-right: 1px solid var(--border);
   cursor: pointer;
   color: var(--text-dim);
   white-space: nowrap;
+  transition: background var(--ease), color var(--ease);
+}
+.tab:hover {
+  background: var(--panel);
+  color: var(--text);
 }
 .tab.active {
   background: var(--bg);
   color: var(--text);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+.tab-icon {
+  opacity: 0.75;
+}
+.tab-title {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .tab-close {
   background: none;
   border: none;
   color: var(--muted);
   cursor: pointer;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--ease), background var(--ease), color var(--ease);
+}
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
 }
 .tab-close:hover {
+  background: var(--sel);
   color: var(--danger);
 }
 
@@ -236,14 +332,26 @@ body {
   margin: auto;
   text-align: center;
   color: var(--muted);
+  max-width: 360px;
+}
+.empty-state h2 {
+  color: var(--text-dim);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 /* ---------- Toolbar ---------- */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 7px;
+  padding: 7px 10px;
   background: var(--bg-alt);
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
@@ -260,10 +368,62 @@ body {
 .muted {
   color: var(--muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 .ro-note {
   color: var(--warn);
   font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+}
+
+/* Visually groups related toolbar controls into one pill so a long row of
+   buttons reads as a few decisions instead of a wall of identical boxes. */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px;
+}
+.toolbar-group .mini {
+  background: transparent;
+  border: 1px solid transparent;
+}
+.toolbar-group .mini:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: transparent;
+}
+.toolbar-group .mini.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.toolbar-group .mini.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.count-badge {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-left: 4px;
+  font-size: 11px;
+}
+
+/* Add-row is a lightweight, reversible action (opens a dialog) — an outline
+   keeps it visually calmer than the solid Save/Apply buttons that commit data. */
+.mini.outline {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.mini.outline:hover:not(:disabled) {
+  background: rgba(137, 180, 250, 0.12);
 }
 
 /* ---------- Grid ---------- */
@@ -396,6 +556,11 @@ th.sortable:hover {
   font-size: 12px;
   color: var(--text-dim);
 }
+.console-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .running-badge {
   background: var(--accent-2);
   color: #000;
@@ -434,21 +599,32 @@ button {
   font-size: 16px;
   cursor: pointer;
   line-height: 1;
+  border-radius: 5px;
+  padding: 2px 5px;
+  transition: background var(--ease);
+}
+.btn-icon:hover {
+  background: var(--panel-2);
 }
 .mini {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 3px 9px;
-  border-radius: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 12px;
+  transition: background var(--ease), border-color var(--ease), color var(--ease), opacity var(--ease);
 }
 .mini:hover:not(:disabled) {
   background: var(--panel-2);
+  border-color: var(--muted);
+}
+.mini:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 .mini:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
 .mini.primary {
@@ -457,9 +633,17 @@ button {
   border-color: var(--accent);
   font-weight: 600;
 }
-.mini.danger:hover {
+.mini.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  border-color: var(--accent);
+}
+.mini.danger {
+  color: var(--text-dim);
+}
+.mini.danger:hover:not(:disabled) {
   border-color: var(--danger);
   color: var(--danger);
+  background: var(--panel);
 }
 .hint {
   color: var(--muted);
@@ -475,6 +659,9 @@ button {
   font-size: 11px;
   max-height: 180px;
   overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 .json-header {
   display: flex;
@@ -523,16 +710,23 @@ label.inline {
 label.inline input {
   width: auto;
 }
+.limit-select {
+  padding: 2px 4px;
+  font-size: 11px;
+  border-radius: 4px;
+}
 
 /* ---------- Modal ---------- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(1px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
+  animation: fade-in 120ms ease;
 }
 .modal {
   background: var(--panel);
@@ -543,17 +737,30 @@ label.inline input {
   max-width: 92vw;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  animation: modal-in 140ms ease;
 }
 .modal h3 {
   margin: 0 0 14px;
+  font-size: 15px;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
 }
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px 14px;
 }
-.form-grid label,
-.insert-row label {
+.form-grid label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -607,27 +814,97 @@ label.inline input {
 }
 
 /* Insert dialog */
+.insert-modal {
+  width: 480px;
+}
+.insert-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.insert-header .hint {
+  padding: 0;
+  margin-top: 2px;
+}
+.insert-header-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
 .insert-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   max-height: 50vh;
   overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
-.insert-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.insert-field {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--ease);
+}
+.insert-field:last-child {
+  border-bottom: none;
+}
+.insert-field:hover {
+  background: var(--panel-2);
+}
+.insert-field.is-default {
+  background: var(--bg);
+}
+.insert-field-head {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.insert-field-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
 }
 .col-name {
   font-weight: 600;
   color: var(--text);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .col-type {
   color: var(--muted);
-  margin-left: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+.insert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.insert-toggle input {
+  width: auto;
+}
+.insert-field-input {
+  width: 100%;
+}
+.insert-field-input:disabled {
+  opacity: 0.55;
+  font-style: italic;
+  cursor: default;
 }
 
 /* ---------- Crash / error boundary ---------- */
@@ -817,21 +1094,46 @@ tr.row-deleted td {
 }
 
 /* ---------- History panel ---------- */
+.history-filter {
+  width: 100%;
+  margin-top: 8px;
+}
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 60vh;
+  gap: 5px;
+  max-height: 55vh;
   overflow-y: auto;
+  padding: 2px;
+  margin-top: 8px;
 }
 .history-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  transition: border-color var(--ease);
+}
+.history-item:hover {
+  border-color: var(--muted);
 }
 .history-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.history-time {
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.history-item .generated-script {
+  margin: 0;
+  background: var(--bg);
+  max-height: 90px;
+  padding: 5px 7px;
 }

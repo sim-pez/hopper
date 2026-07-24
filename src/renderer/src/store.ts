@@ -46,6 +46,7 @@ interface AppState {
   refreshConnections: () => Promise<void>
   setStatus: (status: ConnectionStatus) => void
   appendLog: (out: ScriptOutput) => void
+  clearLog: (connectionId: string) => void
   stateOf: (id: string) => ConnectionState
 
   openTab: (tab: Tab) => void
@@ -75,6 +76,9 @@ export const useStore = create<AppState>((set, get) => ({
       const next = [...prev, out].slice(-1000) // cap buffer
       return { scriptLogs: { ...s.scriptLogs, [out.id]: next } }
     }),
+
+  clearLog: (connectionId) =>
+    set((s) => ({ scriptLogs: { ...s.scriptLogs, [connectionId]: [] } })),
 
   stateOf: (id) => get().statuses[id]?.state ?? 'disconnected',
 

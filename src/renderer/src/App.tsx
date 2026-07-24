@@ -36,8 +36,8 @@ export function App(): JSX.Element {
           {activeTab?.kind === 'result' && <ResultTabView key={activeTab.id} tab={activeTab} />}
           {!activeTab && (
             <div className="empty-state">
-              <h2>DB Manager</h2>
-              <p>Select a connection and connect, then open a table or a query tab.</p>
+              <h2>No tab open</h2>
+              <p>Connect to a database in the sidebar, then open a table or start a query to see data here.</p>
             </div>
           )}
         </div>

@@ -9,12 +9,14 @@ interface Props {
 }
 
 export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
-  const { connections, statuses, refreshConnections, setStatus, showConsole, stateOf } = useStore()
+  const { connections, statuses, refreshConnections, setStatus, showConsole, stateOf, clearLog } =
+    useStore()
   const [busy, setBusy] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const connect = async (id: string) => {
     setBusy(id)
+    clearLog(id)
     showConsole(id)
     try {
       const status = await window.api.db.connect(id)
@@ -62,7 +64,7 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
           const connected = state === 'connected'
           const isOpen = expanded === c.id
           return (
-            <div key={c.id} className="conn-item">
+            <div key={c.id} className={`conn-item ${connected ? 'connected' : ''}`}>
               <div className="conn-row">
                 <span className="conn-dot" style={{ background: c.color || '#6c7086' }} />
                 <button
@@ -74,7 +76,7 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
                   {c.name}
                   {c.readOnly && <span className="ro-badge">RO</span>}
                 </button>
-                <span className={`state-dot state-${state}`} title={state} />
+                <span className={`state-dot state-${state}`} title={`Status: ${state}`} />
               </div>
               <div className="conn-actions">
                 {connected ? (
@@ -83,21 +85,24 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
                   </button>
                 ) : (
                   <button className="mini primary" onClick={() => connect(c.id)} disabled={busy === c.id}>
-                    {busy === c.id ? '…' : 'Connect'}
+                    {busy === c.id ? 'Connecting…' : 'Connect'}
                   </button>
                 )}
                 <button className="mini" title="Query console & script log" onClick={() => showConsole(c.id)}>
                   Console
                 </button>
-                <button className="mini" title="Edit" onClick={() => onEdit(c)}>
-                  ✎
-                </button>
-                <button className="mini" title="Duplicate" onClick={() => duplicate(c.id)}>
-                  ⧉
-                </button>
-                <button className="mini danger" title="Delete" onClick={() => remove(c)}>
-                  ✕
-                </button>
+                <span className="spacer" />
+                <div className="icon-group">
+                  <button className="icon-btn-sm" title="Edit connection" onClick={() => onEdit(c)}>
+                    ✎
+                  </button>
+                  <button className="icon-btn-sm" title="Duplicate connection" onClick={() => duplicate(c.id)}>
+                    ⧉
+                  </button>
+                  <button className="icon-btn-sm danger" title="Delete connection" onClick={() => remove(c)}>
+                    ✕
+                  </button>
+                </div>
               </div>
               {statuses[c.id]?.error && <div className="conn-error">{statuses[c.id]?.error}</div>}
               {connected && isOpen && <SchemaTree connectionId={c.id} connectionName={c.name} />}

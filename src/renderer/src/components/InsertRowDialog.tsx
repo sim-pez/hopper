@@ -29,38 +29,71 @@ export function InsertRowDialog({ columns, onClose, onInsert }: Props): JSX.Elem
     }
   }
 
+  const includedCount = Object.values(include).filter(Boolean).length
+
+  const setAll = (on: boolean) => {
+    setInclude(Object.fromEntries(columns.map((c) => [c.name, on])))
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Insert row</h3>
-        <p className="hint">Unchecked columns use the database default. Empty checked columns insert NULL.</p>
-        <div className="insert-grid">
-          {columns.map((col) => (
-            <div key={col.name} className="insert-row">
-              <label className="inline">
-                <input
-                  type="checkbox"
-                  checked={!!include[col.name]}
-                  onChange={(e) => setInclude((p) => ({ ...p, [col.name]: e.target.checked }))}
-                />
-                <span className="col-name">{col.name}</span>
-                <span className="col-type">{col.dataType}</span>
-              </label>
-              <input
-                disabled={!include[col.name]}
-                value={vals[col.name] ?? ''}
-                onChange={(e) => setVals((p) => ({ ...p, [col.name]: e.target.value }))}
-              />
-            </div>
-          ))}
+      <div className="modal insert-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="insert-header">
+          <div>
+            <h3>Insert row</h3>
+            <p className="hint">Flip "value" off to use the column's database default. A blank value inserts NULL.</p>
+          </div>
+          <div className="insert-header-actions">
+            <button type="button" className="mini" onClick={() => setAll(true)}>
+              All
+            </button>
+            <button type="button" className="mini" onClick={() => setAll(false)}>
+              None
+            </button>
+          </div>
         </div>
+
+        <div className="insert-grid">
+          {columns.map((col) => {
+            const on = !!include[col.name]
+            return (
+              <div key={col.name} className={`insert-field ${on ? '' : 'is-default'}`}>
+                <div className="insert-field-head">
+                  <span className="insert-field-name">
+                    <span className="col-name">{col.name}</span>
+                    {col.dataType && <span className="col-type">{col.dataType}</span>}
+                  </span>
+                  <label className="insert-toggle">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={(e) => setInclude((p) => ({ ...p, [col.name]: e.target.checked }))}
+                    />
+                    value
+                  </label>
+                </div>
+                <input
+                  className="insert-field-input"
+                  disabled={!on}
+                  placeholder={on ? '' : 'database default'}
+                  value={vals[col.name] ?? ''}
+                  onChange={(e) => setVals((p) => ({ ...p, [col.name]: e.target.value }))}
+                />
+              </div>
+            )
+          })}
+        </div>
+
         <div className="modal-actions">
+          <span className="muted">
+            {includedCount} of {columns.length} column{columns.length === 1 ? '' : 's'} set
+          </span>
           <div className="spacer" />
           <button className="mini" onClick={onClose}>
             Cancel
           </button>
           <button className="mini primary" onClick={submit} disabled={saving}>
-            {saving ? 'Inserting…' : 'Insert'}
+            {saving ? 'Inserting…' : 'Insert row'}
           </button>
         </div>
       </div>

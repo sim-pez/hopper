@@ -16,3 +16,12 @@ export function getFreePort(): Promise<number> {
     })
   })
 }
+
+/** Picks a random port in the dynamic/private range (49152-65535) for a bind that
+ *  happens on a *remote* host we have no socket API access to (e.g. inside a
+ *  devcontainer over ssh), so it can't be OS-verified free like `getFreePort()`.
+ *  Rotating the port on every attempt is still enough to dodge a leftover process
+ *  from a prior run that was pinned to one fixed port. */
+export function randomRemotePort(): number {
+  return 49152 + Math.floor(Math.random() * (65535 - 49152 + 1))
+}

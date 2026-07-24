@@ -14,9 +14,12 @@ export function TabBar(): JSX.Element {
           onClick={() => setActiveTab(t.id)}
         >
           <span className="tab-icon">{t.kind === 'table' ? '▤' : '⚡'}</span>
-          <span className="tab-title">{t.title}</span>
+          <span className="tab-title" title={t.title}>
+            {t.title}
+          </span>
           <button
             className="tab-close"
+            title="Close tab"
             onClick={(e) => {
               e.stopPropagation()
               closeTab(t.id)

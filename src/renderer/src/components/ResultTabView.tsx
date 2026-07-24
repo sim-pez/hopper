@@ -1,6 +1,6 @@
 import type { ResultTab } from '../store'
 import { DataGrid } from './DataGrid'
-import { downloadText, toCsv } from '../utils'
+import { downloadXlsx } from '../utils'
 
 interface Props {
   tab: ResultTab
@@ -22,8 +22,8 @@ export function ResultTabView({ tab }: Props): JSX.Element {
         </code>
         <div className="spacer" />
         {result.rows.length > 0 && (
-          <button className="mini" onClick={() => downloadText('query.csv', toCsv(result.columns, result.rows))}>
-            Export CSV
+          <button className="mini" onClick={() => downloadXlsx('query.xlsx', result.columns, result.rows)}>
+            Export XLSX
           </button>
         )}
       </div>

@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx'
 import type { ColumnMeta } from '@shared/types'
 
 /** Render a DB value for display in a grid cell. */
@@ -22,18 +23,22 @@ export function parseEdit(text: string): unknown {
   return text
 }
 
-export function toCsv(columns: ColumnMeta[], rows: unknown[][]): string {
-  const esc = (v: unknown): string => {
-    const s = displayValue(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  const header = columns.map((c) => esc(c.name)).join(',')
-  const body = rows.map((r) => r.map(esc).join(',')).join('\n')
-  return `${header}\n${body}`
+/** Keep native types (numbers, dates, booleans) so Excel can sort/sum/filter them. */
+function toCellValue(v: unknown): unknown {
+  if (v === null || v === undefined) return ''
+  if (v instanceof Date || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') return v
+  if (typeof v === 'bigint') return v.toString()
+  return JSON.stringify(v)
 }
 
-export function downloadText(filename: string, text: string): void {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+/** Build and download a single-sheet .xlsx workbook from grid columns/rows. */
+export function downloadXlsx(filename: string, columns: ColumnMeta[], rows: unknown[][]): void {
+  const data = [columns.map((c) => c.name), ...rows.map((r) => r.map(toCellValue))]
+  const sheet = XLSX.utils.aoa_to_sheet(data)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Data')
+  const buf = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

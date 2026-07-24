@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ColumnMeta, QueryResult, TableRef } from '@shared/types'
 import { useStore } from '../store'
 import { SqlEditor } from './SqlEditor'
+import { HistoryPanel } from './HistoryPanel'
 import { uid } from '../utils'
 
 interface Props {
@@ -79,7 +80,10 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [lastMs, setLastMs] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const historyKey = `${connectionId}:__query__`
 
   // Result sets open in their own tab; the console only reports non-result outcomes.
   const openResultTab = (querySql: string, result: QueryResult) => {
@@ -144,15 +148,18 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     setError(null)
     try {
       const res = await window.api.db.query(connectionId, trimmed)
+      void window.api.history.add(historyKey, [{ sql: trimmed, ts: Date.now() }])
+      setLastMs(res.durationMs ?? null)
       if (res.columns.length > 0) {
         // A result set — show it in a dedicated tab, keep the console compact.
         openResultTab(trimmed, res)
         setMessage(null)
       } else {
-        setMessage(`${res.command ?? 'OK'} · ${res.rowCount} row(s) affected · ${res.durationMs ?? 0} ms`)
+        setMessage(`${res.command ?? 'OK'} · ${res.rowCount} row(s) affected`)
       }
     } catch (e) {
       setError(String(e))
+      setLastMs(null)
     } finally {
       setRunning(false)
     }
@@ -165,9 +172,12 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
           Query · {conn?.name ?? connectionId}
           {status?.scriptRunning && <span className="running-badge">script running</span>}
         </span>
-        <button className="btn-icon" onClick={() => showConsole(null)} title="Hide">
-          ▾
-        </button>
+        <div className="console-header-right">
+          {lastMs != null && <span className="muted">{lastMs} ms</span>}
+          <button className="btn-icon" onClick={() => showConsole(null)} title="Hide">
+            ▾
+          </button>
+        </div>
       </div>
 
       {logs.length > 0 && (
@@ -197,9 +207,20 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         {message && <span className="muted">{message}</span>}
         <div className="spacer" />
         <span className="muted">results open in a new tab</span>
+        <button className="mini" title="Past queries run on this connection" onClick={() => setShowHistory(true)}>
+          History
+        </button>
       </div>
 
       {error && <div className="error-bar">{error}</div>}
+
+      {showHistory && (
+        <HistoryPanel
+          tableKey={historyKey}
+          title={conn?.name ?? connectionId}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
     </div>
   )
 }

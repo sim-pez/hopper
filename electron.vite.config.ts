@@ -8,6 +8,9 @@ import { resolve } from 'path'
 // `electron`, breaking the main process at startup.
 export default defineConfig({
   main: {
+    resolve: {
+      alias: { '@shared': resolve(__dirname, 'src/shared') }
+    },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/main/index.ts') }
@@ -15,6 +18,9 @@ export default defineConfig({
     }
   },
   preload: {
+    resolve: {
+      alias: { '@shared': resolve(__dirname, 'src/shared') }
+    },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') }

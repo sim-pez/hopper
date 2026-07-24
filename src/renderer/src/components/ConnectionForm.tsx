@@ -103,7 +103,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
   }
 
   const generatedScript = useMemo(
-    () => (form.sshDevcontainer ? buildSshDevcontainerScript(form.sshDevcontainer, 'auto') : ''),
+    () => (form.sshDevcontainer ? buildSshDevcontainerScript(form.sshDevcontainer, 'auto', 'auto') : ''),
     [form.sshDevcontainer]
   )
 
