@@ -78,7 +78,11 @@ class PreScriptRunner extends EventEmitter {
       child.on('exit', (code, signal) => {
         record.exited = true
         this.emitOutput(cfg.id, 'system', `script exited (code=${code ?? 'null'} signal=${signal ?? 'null'})\n`)
-        this.emit('exit', cfg.id)
+        // A clean (code 0, no signal) exit is a normal one-shot script finishing —
+        // only surface non-clean exits as potential connection-affecting events,
+        // so consumers don't tear down a live connection whose setup script
+        // simply completed successfully.
+        if (code !== 0 || signal) this.emit('exit', cfg.id, code, signal)
         // Exiting before ready is only a failure for a non-zero code.
         if (code && code !== 0) done(() => reject(new Error(`Pre-connection script exited with code ${code}`)))
         else done(resolve) // e.g. a one-shot setup script that finished cleanly

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnectionInput, ConnectionView, DriverKind, SshDevcontainerConfig, TestResult } from '@shared/types'
+import type {
+  ConnectionExport,
+  ConnectionInput,
+  ConnectionView,
+  DriverKind,
+  SshDevcontainerConfig,
+  TestResult
+} from '@shared/types'
 import { buildSshDevcontainerScript, defaultReadyRegex } from '@shared/sshDevcontainerScript'
 
 interface Props {
@@ -18,9 +25,73 @@ const EMPTY_SSH_DEVCONTAINER: SshDevcontainerConfig = {
   remotePort: 5432
 }
 
+const DRIVERS: DriverKind[] = ['postgres', 'mysql']
+const MODES: NonNullable<ConnectionInput['preConnectionMode']>[] = ['none', 'ssh-devcontainer']
+
+/** The whole connection as JSON — every setting, password included. `id` and the
+ *  timestamps are left out so a config can be pasted into any connection. */
+function toExport(f: ConnectionInput): ConnectionExport {
+  return {
+    name: f.name,
+    color: f.color,
+    driver: f.driver,
+    host: f.host,
+    port: f.port,
+    database: f.database,
+    user: f.user,
+    password: f.password ?? '',
+    ssl: !!f.ssl,
+    readOnly: !!f.readOnly,
+    preScript: f.preScript,
+    preScriptReadyRegex: f.preScriptReadyRegex,
+    preScriptWaitMs: f.preScriptWaitMs,
+    preConnectionMode: f.preConnectionMode,
+    sshDevcontainer: f.sshDevcontainer
+  }
+}
+
+function isSshConfig(v: unknown): v is SshDevcontainerConfig {
+  const c = v as SshDevcontainerConfig
+  return (
+    !!c &&
+    typeof c === 'object' &&
+    typeof c.sshHost === 'string' &&
+    typeof c.workspaceFolder === 'string' &&
+    typeof c.portForwardCommand === 'string' &&
+    typeof c.remotePort === 'number'
+  )
+}
+
+/** Picks the recognized, well-typed keys out of arbitrary parsed JSON. Unknown or
+ *  wrongly-typed keys are ignored; a patch with nothing usable means "not a config". */
+function parseExport(parsed: unknown): Partial<ConnectionInput> | null {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const src = parsed as Record<string, unknown>
+  const patch: Partial<ConnectionInput> = {}
+
+  for (const k of ['name', 'color', 'host', 'database', 'user', 'password', 'preScript', 'preScriptReadyRegex'] as const) {
+    if (typeof src[k] === 'string') patch[k] = src[k] as string
+  }
+  for (const k of ['port', 'preScriptWaitMs'] as const) {
+    if (typeof src[k] === 'number' && Number.isFinite(src[k])) patch[k] = src[k] as number
+  }
+  for (const k of ['ssl', 'readOnly'] as const) {
+    if (typeof src[k] === 'boolean') patch[k] = src[k] as boolean
+  }
+  if (DRIVERS.includes(src.driver as DriverKind)) patch.driver = src.driver as DriverKind
+  if (MODES.includes(src.preConnectionMode as (typeof MODES)[number])) {
+    patch.preConnectionMode = src.preConnectionMode as (typeof MODES)[number]
+  }
+  // A bare sshDevcontainer object is also accepted, so older ssh-only JSON still imports.
+  if (isSshConfig(src.sshDevcontainer)) patch.sshDevcontainer = src.sshDevcontainer
+  else if (isSshConfig(src)) patch.sshDevcontainer = src as unknown as SshDevcontainerConfig
+
+  return Object.keys(patch).length ? patch : null
+}
+
 export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Element {
   const editing = !!connection
-  const [form, setForm] = useState<ConnectionInput>(() => ({
+  const initialForm: ConnectionInput = {
     id: connection?.id,
     name: connection?.name ?? '',
     color: connection?.color ?? COLORS[5],
@@ -37,14 +108,13 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     preScriptWaitMs: connection?.preScriptWaitMs ?? 1500,
     preConnectionMode: connection?.preConnectionMode ?? 'none',
     sshDevcontainer: connection?.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER
-  }))
+  }
+  const [form, setForm] = useState<ConnectionInput>(initialForm)
   const [test, setTest] = useState<TestResult | null>(null)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [sshHosts, setSshHosts] = useState<string[]>([])
-  const [jsonText, setJsonText] = useState(() =>
-    JSON.stringify(connection?.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER, null, 2)
-  )
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(toExport(initialForm), null, 2))
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -53,18 +123,32 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     window.api.system.listSshHosts().then(setSshHosts).catch(() => setSshHosts([]))
   }, [])
 
-  const set = <K extends keyof ConnectionInput>(k: K, v: ConnectionInput[K]) =>
-    setForm((f) => ({ ...f, [k]: v }))
-
-  const setSsh = <K extends keyof SshDevcontainerConfig>(k: K, v: SshDevcontainerConfig[K]) => {
-    const next = { ...(form.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER), [k]: v }
-    setForm((f) => ({ ...f, sshDevcontainer: next }))
-    setJsonText(JSON.stringify(next, null, 2))
+  /** Single place that keeps the form and the JSON box in sync (field edits win
+   *  over whatever was typed in the box). */
+  const applyForm = (next: ConnectionInput) => {
+    setForm(next)
+    setJsonText(JSON.stringify(toExport(next), null, 2))
     setJsonError(null)
   }
 
+  // Pull the stored password in so the JSON box really is the whole connection.
+  useEffect(() => {
+    if (!connection) return
+    window.api.connections
+      .exportConfig(connection.id)
+      .then((cfg) => applyForm({ ...initialForm, ...cfg, id: connection.id }))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection?.id])
+
+  const set = <K extends keyof ConnectionInput>(k: K, v: ConnectionInput[K]) =>
+    applyForm({ ...form, [k]: v })
+
+  const setSsh = <K extends keyof SshDevcontainerConfig>(k: K, v: SshDevcontainerConfig[K]) =>
+    applyForm({ ...form, sshDevcontainer: { ...(form.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER), [k]: v } })
+
   /** Dynamically interprets whatever JSON is currently typed/pasted: valid and
-   *  shaped like a config -> applied to the form immediately; otherwise the
+   *  shaped like a connection -> applied to the form immediately; otherwise the
    *  form is left untouched and an inline error is shown. */
   const onJsonChange = (text: string) => {
     setJsonText(text)
@@ -75,18 +159,12 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
       setJsonError('Invalid JSON')
       return
     }
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof (parsed as SshDevcontainerConfig).sshHost === 'string' &&
-      typeof (parsed as SshDevcontainerConfig).workspaceFolder === 'string' &&
-      typeof (parsed as SshDevcontainerConfig).portForwardCommand === 'string' &&
-      typeof (parsed as SshDevcontainerConfig).remotePort === 'number'
-    ) {
-      setForm((f) => ({ ...f, sshDevcontainer: parsed as SshDevcontainerConfig }))
+    const patch = parseExport(parsed)
+    if (patch) {
+      setForm((f) => ({ ...f, ...patch }))
       setJsonError(null)
     } else {
-      setJsonError('Expected sshHost, workspaceFolder, portForwardCommand (strings) and remotePort (number)')
+      setJsonError('No recognized connection fields (name, driver, host, port, database, user, password, …)')
     }
   }
 
@@ -94,6 +172,16 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     await navigator.clipboard.writeText(jsonText)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  const onDownloadJson = () => {
+    const slug = (form.name || 'connection').replace(/[^\w.-]+/g, '-').toLowerCase()
+    const url = URL.createObjectURL(new Blob([jsonText], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${slug}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const onLoadJsonFile = (file: File) => {
@@ -321,46 +409,52 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 <small>Defaults to "Forwarding from" if left blank.</small>
               </label>
 
-              <label className="span2">
-                <div className="json-header">
-                  <span>Config JSON (export / import)</span>
-                  <div className="json-actions">
-                    <button type="button" className="mini" onClick={onCopyJson}>
-                      {copied ? 'Copied!' : 'Copy JSON'}
-                    </button>
-                    <button type="button" className="mini" onClick={() => fileInputRef.current?.click()}>
-                      Load JSON…
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/json"
-                      hidden
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) onLoadJsonFile(file)
-                        e.target.value = ''
-                      }}
-                    />
-                  </div>
-                </div>
-                <textarea
-                  className="mono"
-                  rows={8}
-                  spellCheck={false}
-                  value={jsonText}
-                  onChange={(e) => onJsonChange(e.target.value)}
-                />
-                {jsonError && <small className="json-error">{jsonError}</small>}
-                <small>Paste or edit JSON here — it's interpreted live and applied to the fields above.</small>
-              </label>
-
               <details className="span2">
                 <summary>Generated script</summary>
                 <pre className="mono generated-script">{generatedScript}</pre>
               </details>
             </>
           )}
+
+          <label className="span2">
+            <div className="json-header">
+              <span>Connection JSON (export / import)</span>
+              <div className="json-actions">
+                <button type="button" className="mini" onClick={onCopyJson}>
+                  {copied ? 'Copied!' : 'Copy JSON'}
+                </button>
+                <button type="button" className="mini" onClick={onDownloadJson}>
+                  Save JSON…
+                </button>
+                <button type="button" className="mini" onClick={() => fileInputRef.current?.click()}>
+                  Load JSON…
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) onLoadJsonFile(file)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+            </div>
+            <textarea
+              className="mono"
+              rows={12}
+              spellCheck={false}
+              value={jsonText}
+              onChange={(e) => onJsonChange(e.target.value)}
+            />
+            {jsonError && <small className="json-error">{jsonError}</small>}
+            <small>
+              The whole connection — <strong>password in plaintext included</strong>. Paste or edit here and
+              it's applied live to the fields above; Save still has to be pressed.
+            </small>
+          </label>
         </div>
 
         {test && (

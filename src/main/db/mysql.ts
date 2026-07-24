@@ -31,6 +31,7 @@ const SYSTEM_SCHEMAS = new Set(['mysql', 'information_schema', 'performance_sche
 export class MysqlDriver implements Driver {
   private pool!: mysql.Pool
   private readOnly = false
+  private currentConn: mysql.PoolConnection | null = null
 
   async connect(cfg: ConnectionConfig, password?: string): Promise<void> {
     this.readOnly = !!cfg.readOnly
@@ -42,7 +43,10 @@ export class MysqlDriver implements Driver {
       password,
       ssl: cfg.ssl ? { rejectUnauthorized: false } : undefined,
       connectionLimit: 4,
-      multipleStatements: true,
+      // Multi-statement execution would let a "read-only" connection smuggle a
+      // write past the first-keyword regex check in query() below (e.g.
+      // `SELECT 1; DROP TABLE users;`), so it's only enabled when writable.
+      multipleStatements: !this.readOnly,
       connectTimeout: 10_000
     })
     const conn = await this.pool.getConnection()
@@ -238,24 +242,45 @@ export class MysqlDriver implements Driver {
       throw new Error('Connection is read-only: only SELECT/SHOW queries are allowed')
     }
     const started = Date.now()
-    const [result, fields] = await this.pool.query({ sql, rowsAsArray: true })
-    // DML returns a ResultSetHeader object (not an array of rows).
-    if (!Array.isArray(result)) {
-      const header = result as mysql.ResultSetHeader
+    // Use a dedicated connection (not pool.query) so its thread id is stable
+    // and reachable for cancellation while this query is in flight.
+    const conn = await this.pool.getConnection()
+    this.currentConn = conn
+    try {
+      const [result, fields] = await conn.query({ sql, rowsAsArray: true })
+      // DML returns a ResultSetHeader object (not an array of rows).
+      if (!Array.isArray(result)) {
+        const header = result as mysql.ResultSetHeader
+        return {
+          columns: [],
+          rows: [],
+          rowCount: header.affectedRows ?? 0,
+          command: 'OK',
+          durationMs: Date.now() - started
+        }
+      }
+      const columns: ColumnMeta[] = ((fields as mysql.FieldPacket[]) ?? []).map((f) => ({ name: f.name }))
       return {
-        columns: [],
-        rows: [],
-        rowCount: header.affectedRows ?? 0,
-        command: 'OK',
+        columns,
+        rows: result as unknown[][],
+        rowCount: result.length,
         durationMs: Date.now() - started
       }
+    } finally {
+      this.currentConn = null
+      conn.release()
     }
-    const columns: ColumnMeta[] = ((fields as mysql.FieldPacket[]) ?? []).map((f) => ({ name: f.name }))
-    return {
-      columns,
-      rows: result as unknown[][],
-      rowCount: result.length,
-      durationMs: Date.now() - started
+  }
+
+  async cancelCurrent(): Promise<void> {
+    const conn = this.currentConn
+    const threadId = conn?.threadId
+    if (!threadId) return
+    const killer = await this.pool.getConnection()
+    try {
+      await killer.query('KILL QUERY ?', [threadId])
+    } finally {
+      killer.release()
     }
   }
 }

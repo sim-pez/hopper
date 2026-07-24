@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ColumnMeta, QueryResult, TableRef } from '@shared/types'
+import type { ColumnMeta, QueryResult } from '@shared/types'
 import { useStore } from '../store'
 import { SqlEditor } from './SqlEditor'
 import { HistoryPanel } from './HistoryPanel'
+import { SavedQueriesPanel } from './SavedQueriesPanel'
+import { useDbMetadata } from '../hooks/useDbMetadata'
 import { uid } from '../utils'
 
 interface Props {
@@ -10,62 +12,6 @@ interface Props {
 }
 
 const EMPTY_LOGS: never[] = []
-
-// A compact set of SQL keywords offered by the autocompleter.
-const SQL_KEYWORDS = [
-  'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE',
-  'CREATE', 'TABLE', 'ALTER', 'DROP', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER',
-  'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'OFFSET', 'DISTINCT', 'AS',
-  'AND', 'OR', 'NOT', 'NULL', 'IS', 'IN', 'LIKE', 'BETWEEN', 'COUNT', 'SUM',
-  'AVG', 'MIN', 'MAX', 'ASC', 'DESC', 'RETURNING', 'WITH', 'UNION', 'CASE',
-  'WHEN', 'THEN', 'ELSE', 'END'
-]
-
-/** Database metadata used for autocompletion and `\d` commands. */
-function useDbMetadata(connectionId: string, connected: boolean) {
-  const [words, setWords] = useState<string[]>(SQL_KEYWORDS)
-  const [tableRefs, setTableRefs] = useState<TableRef[]>([])
-
-  useEffect(() => {
-    if (!connected) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const schemas = await window.api.db.listSchemas(connectionId)
-        const perSchema = await Promise.all(
-          schemas.map((s) => window.api.db.listTables(connectionId, s).catch(() => []))
-        )
-        if (cancelled) return
-        const refs = perSchema.flat()
-        setTableRefs(refs)
-        const vocab = new Set<string>(SQL_KEYWORDS)
-        for (const s of schemas) vocab.add(s)
-        for (const t of refs) vocab.add(t.table)
-        setWords([...vocab])
-
-        // Pull column names in the background (best effort) for richer suggestions.
-        for (const t of refs.slice(0, 200)) {
-          const cols = await window.api.db.getColumns(connectionId, t.schema, t.table).catch(() => [])
-          if (cancelled) return
-          if (cols.length) {
-            setWords((prev) => {
-              const set = new Set(prev)
-              for (const c of cols) set.add(c.name)
-              return [...set]
-            })
-          }
-        }
-      } catch {
-        /* not connected yet or metadata unavailable — keep keyword-only vocab */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [connectionId, connected])
-
-  return { words, tableRefs }
-}
 
 export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const logs = useStore((s) => s.scriptLogs[connectionId] ?? EMPTY_LOGS)
@@ -81,9 +27,22 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showSaved, setShowSaved] = useState(false)
   const [lastMs, setLastMs] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const historyKey = `${connectionId}:__query__`
+
+  const cancel = async () => {
+    await window.api.db.cancelQuery(connectionId)
+  }
+
+  const save = async () => {
+    const trimmed = sql.trim()
+    if (!trimmed) return
+    const name = prompt('Name this query:')
+    if (!name) return
+    await window.api.savedQueries.save({ connectionId, name, sql: trimmed })
+  }
 
   // Result sets open in their own tab; the console only reports non-result outcomes.
   const openResultTab = (querySql: string, result: QueryResult) => {
@@ -204,9 +163,20 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         <button className="mini primary" onClick={run} disabled={running || !connected}>
           {running ? 'Running…' : '▶ Run (⌘↵)'}
         </button>
+        {running && (
+          <button className="mini danger" onClick={cancel}>
+            Cancel
+          </button>
+        )}
         {message && <span className="muted">{message}</span>}
         <div className="spacer" />
         <span className="muted">results open in a new tab</span>
+        <button className="mini" title="Save this query for reuse" onClick={save}>
+          ☆ Save
+        </button>
+        <button className="mini" title="Saved queries" onClick={() => setShowSaved(true)}>
+          Saved
+        </button>
         <button className="mini" title="Past queries run on this connection" onClick={() => setShowHistory(true)}>
           History
         </button>
@@ -219,6 +189,14 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
           tableKey={historyKey}
           title={conn?.name ?? connectionId}
           onClose={() => setShowHistory(false)}
+        />
+      )}
+      {showSaved && (
+        <SavedQueriesPanel
+          connectionId={connectionId}
+          title={conn?.name ?? connectionId}
+          onClose={() => setShowSaved(false)}
+          onSelect={setSql}
         />
       )}
     </div>

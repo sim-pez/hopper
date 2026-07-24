@@ -2,10 +2,12 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type {
   ApplyChangesPayload,
   ConnectionConfig,
+  ConnectionExport,
   ConnectionInput,
   DeleteRowPayload,
   InsertRowPayload,
   QueryHistoryEntry,
+  SavedQueryInput,
   ScriptOutput,
   TableDataOptions,
   TestResult,
@@ -20,10 +22,16 @@ import {
 } from './store/connectionStore'
 import { getPassword } from './store/secrets'
 import { preScriptRunner } from './process/preScriptRunner'
-import { connect, disconnect, getDriver, getStatus, onStatusChange } from './db/pool'
+import { cancelQuery, connect, disconnect, getDriver, getStatus, onStatusChange } from './db/pool'
 import { PostgresDriver } from './db/postgres'
 import { MysqlDriver } from './db/mysql'
 import { addHistory, clearHistory, listHistory } from './store/historyStore'
+import {
+  deleteSavedQuery,
+  listSavedQueries,
+  saveSavedQuery,
+  toggleSavedQueryPin
+} from './store/savedQueriesStore'
 import { listSshHosts } from './ssh/sshConfig'
 import { resolvePreConnection } from './ssh/resolvePreConnection'
 
@@ -43,6 +51,16 @@ export function registerIpc(): void {
   ipcMain.handle('connections:save', (_e, input: ConnectionInput) => saveConnection(input))
   ipcMain.handle('connections:delete', (_e, id: string) => deleteConnection(id))
   ipcMain.handle('connections:duplicate', (_e, id: string) => duplicateConnection(id))
+
+  // Deliberate exception to "no passwords in the renderer": the export box shows
+  // the whole connection, password included, so a config can be moved elsewhere.
+  ipcMain.handle('connections:exportConfig', async (_e, id: string): Promise<ConnectionExport> => {
+    const stored = await getConnection(id)
+    if (!stored) throw new Error(`Connection ${id} not found`)
+    const { id: _id, createdAt: _c, updatedAt: _u, ...settings } = stored
+    const password = await getPassword(id)
+    return password === undefined ? settings : { ...settings, password }
+  })
 
   ipcMain.handle('connections:test', async (_e, id: string): Promise<TestResult> => {
     const stored = await getConnection(id)
@@ -134,11 +152,18 @@ export function registerIpc(): void {
     getDriver(id).applyChanges(payload)
   )
   ipcMain.handle('db:query', (_e, id: string, sql: string) => getDriver(id).query(sql))
+  ipcMain.handle('db:cancelQuery', (_e, id: string) => cancelQuery(id))
 
   // --- Query history ---
   ipcMain.handle('history:list', (_e, key: string) => listHistory(key))
   ipcMain.handle('history:add', (_e, key: string, entries: QueryHistoryEntry[]) => addHistory(key, entries))
   ipcMain.handle('history:clear', (_e, key: string) => clearHistory(key))
+
+  // --- Saved queries ---
+  ipcMain.handle('queries:list', (_e, connectionId: string) => listSavedQueries(connectionId))
+  ipcMain.handle('queries:save', (_e, input: SavedQueryInput) => saveSavedQuery(input))
+  ipcMain.handle('queries:delete', (_e, id: string) => deleteSavedQuery(id))
+  ipcMain.handle('queries:togglePin', (_e, id: string) => toggleSavedQueryPin(id))
 
   // --- System ---
   ipcMain.handle('system:listSshHosts', () => listSshHosts())

@@ -31,10 +31,12 @@ interface Statement {
 export class PostgresDriver implements Driver {
   private pool!: pg.Pool
   private readOnly = false
+  private connCfg!: pg.PoolConfig
+  private currentClient: pg.PoolClient | null = null
 
   async connect(cfg: ConnectionConfig, password?: string): Promise<void> {
     this.readOnly = !!cfg.readOnly
-    this.pool = new Pool({
+    this.connCfg = {
       host: cfg.host,
       port: cfg.port,
       database: cfg.database,
@@ -43,7 +45,8 @@ export class PostgresDriver implements Driver {
       ssl: cfg.ssl ? { rejectUnauthorized: false } : undefined,
       max: 4,
       connectionTimeoutMillis: 10_000
-    })
+    }
+    this.pool = new Pool(this.connCfg)
     // Force an actual connection so failures surface now.
     const client = await this.pool.connect()
     client.release()
@@ -235,16 +238,40 @@ export class PostgresDriver implements Driver {
       throw new Error('Connection is read-only: only SELECT/EXPLAIN queries are allowed')
     }
     const started = Date.now()
-    const res = await this.pool.query({ text: sql, rowMode: 'array' })
-    // Multiple statements return an array of results; surface the last one.
-    const result = Array.isArray(res) ? res[res.length - 1] : res
-    const columns: ColumnMeta[] = (result.fields ?? []).map((f: pg.FieldDef) => ({ name: f.name }))
-    return {
-      columns,
-      rows: (result.rows as unknown[][]) ?? [],
-      rowCount: result.rowCount ?? (result.rows?.length ?? 0),
-      command: result.command,
-      durationMs: Date.now() - started
+    // Use a dedicated client (not pool.query) so its backend PID is stable and
+    // reachable for cancellation while this query is in flight.
+    const client = await this.pool.connect()
+    this.currentClient = client
+    try {
+      const res = await client.query({ text: sql, rowMode: 'array' })
+      // Multiple statements return an array of results; surface the last one.
+      const result = Array.isArray(res) ? res[res.length - 1] : res
+      const columns: ColumnMeta[] = (result.fields ?? []).map((f: pg.FieldDef) => ({ name: f.name }))
+      return {
+        columns,
+        rows: (result.rows as unknown[][]) ?? [],
+        rowCount: result.rowCount ?? (result.rows?.length ?? 0),
+        command: result.command,
+        durationMs: Date.now() - started
+      }
+    } finally {
+      this.currentClient = null
+      client.release()
+    }
+  }
+
+  async cancelCurrent(): Promise<void> {
+    const client = this.currentClient
+    // processID is set on every pg Client/PoolClient at runtime but isn't part
+    // of the public @types/pg surface.
+    const pid = (client as unknown as { processID?: number } | null)?.processID
+    if (!pid) return
+    const cancelClient = new pg.Client(this.connCfg)
+    await cancelClient.connect()
+    try {
+      await cancelClient.query('SELECT pg_cancel_backend($1)', [pid])
+    } finally {
+      await cancelClient.end().catch(() => {})
     }
   }
 }

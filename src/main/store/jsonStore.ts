@@ -7,6 +7,9 @@ import { join } from 'path'
 export class JsonStore<T extends object> {
   private filePath: string
   private cache: T | null = null
+  // Serializes all reads/mutations so concurrent IPC calls can't clobber each
+  // other's in-place edits to the shared cached object.
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(fileName: string, private defaults: T) {
     this.filePath = join(app.getPath('userData'), fileName)
@@ -23,21 +26,34 @@ export class JsonStore<T extends object> {
     return this.cache
   }
 
+  private enqueue<R>(task: () => Promise<R>): Promise<R> {
+    const run = this.queue.then(task, task)
+    this.queue = run.then(
+      () => undefined,
+      () => undefined
+    )
+    return run
+  }
+
   async get<K extends keyof T>(key: K): Promise<T[K]> {
-    return (await this.load())[key]
+    return this.enqueue(async () => (await this.load())[key])
   }
 
   async set<K extends keyof T>(key: K, value: T[K]): Promise<void> {
-    const data = (await this.load()) as T
-    data[key] = value
-    await this.persist(data)
+    await this.enqueue(async () => {
+      const data = (await this.load()) as T
+      data[key] = value
+      await this.persist(data)
+    })
   }
 
   async update(mutator: (data: T) => void): Promise<T> {
-    const data = await this.load()
-    mutator(data)
-    await this.persist(data)
-    return data
+    return this.enqueue(async () => {
+      const data = await this.load()
+      mutator(data)
+      await this.persist(data)
+      return data
+    })
   }
 
   private async persist(data: T): Promise<void> {

@@ -645,6 +645,20 @@ button {
   color: var(--danger);
   background: var(--panel);
 }
+.mini-select {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.saved-query-name {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .hint {
   color: var(--muted);
   font-size: 12px;

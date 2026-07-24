@@ -6,6 +6,7 @@ import type {
   ConnectionStatus,
   DeleteRowPayload,
   InsertRowPayload,
+  SavedQueryInput,
   ScriptOutput,
   TableDataOptions,
   UpdateCellPayload
@@ -18,7 +19,8 @@ const api: Api = {
     delete: (id: string) => ipcRenderer.invoke('connections:delete', id),
     duplicate: (id: string) => ipcRenderer.invoke('connections:duplicate', id),
     test: (id: string) => ipcRenderer.invoke('connections:test', id),
-    testDraft: (input: ConnectionInput) => ipcRenderer.invoke('connections:testDraft', input)
+    testDraft: (input: ConnectionInput) => ipcRenderer.invoke('connections:testDraft', input),
+    exportConfig: (id: string) => ipcRenderer.invoke('connections:exportConfig', id)
   },
   db: {
     connect: (id: string) => ipcRenderer.invoke('db:connect', id),
@@ -37,7 +39,8 @@ const api: Api = {
       ipcRenderer.invoke('db:previewChanges', id, payload),
     applyChanges: (id: string, payload: ApplyChangesPayload) =>
       ipcRenderer.invoke('db:applyChanges', id, payload),
-    query: (id: string, sql: string) => ipcRenderer.invoke('db:query', id, sql)
+    query: (id: string, sql: string) => ipcRenderer.invoke('db:query', id, sql),
+    cancelQuery: (id: string) => ipcRenderer.invoke('db:cancelQuery', id)
   },
   scripts: {
     onOutput: (cb: (out: ScriptOutput) => void) => {
@@ -58,6 +61,12 @@ const api: Api = {
   },
   system: {
     listSshHosts: () => ipcRenderer.invoke('system:listSshHosts')
+  },
+  savedQueries: {
+    list: (connectionId: string) => ipcRenderer.invoke('queries:list', connectionId),
+    save: (input: SavedQueryInput) => ipcRenderer.invoke('queries:save', input),
+    delete: (id: string) => ipcRenderer.invoke('queries:delete', id),
+    togglePin: (id: string) => ipcRenderer.invoke('queries:togglePin', id)
   }
 }
 

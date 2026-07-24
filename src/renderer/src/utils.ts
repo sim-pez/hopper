@@ -47,6 +47,25 @@ export function downloadXlsx(filename: string, columns: ColumnMeta[], rows: unkn
   URL.revokeObjectURL(url)
 }
 
+/** Build and download a .csv file from grid columns/rows (RFC 4180 quoting). */
+export function downloadCsv(filename: string, columns: ColumnMeta[], rows: unknown[][]): void {
+  const escape = (v: unknown): string => {
+    const s = displayValue(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const lines = [
+    columns.map((c) => escape(c.name)).join(','),
+    ...rows.map((r) => r.map(escape).join(','))
+  ]
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
 }

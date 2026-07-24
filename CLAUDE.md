@@ -23,8 +23,11 @@ Always run `npm run typecheck` before considering a change done — there is no 
   range before bumping.
 - **Do not add `externalizeDepsPlugin()`** to `electron.vite.config.ts`. It's deprecated and
   overrides the preset that externalizes `electron`. `build.externalizeDeps` defaults to true.
-- **Never expose passwords to the renderer.** The IPC/preload surface returns only
-  `hasPassword`. Passwords live encrypted via `safeStorage` (`src/main/store/secrets.ts`).
+- **Never expose passwords to the renderer**, with one deliberate exception:
+  `connections.exportConfig(id)` returns the full connection incl. the plaintext password,
+  for the export/import JSON box in `ConnectionForm`. Everything else (`list`, `save`, …)
+  returns only `hasPassword`. Passwords live encrypted via `safeStorage`
+  (`src/main/store/secrets.ts`).
 - **All SQL uses bound parameters**; identifiers are quoted per-driver (`quoteIdent`). No
   string interpolation of user values into SQL.
 
@@ -64,5 +67,7 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
 
 - Not a git repo yet.
 - `out/` is build output (gitignored); the Electron binary downloads lazily on first run.
+- App icon lives in `resources/` (`icon.png` 1024², `icon.icns`, `icon.ico`) and is loaded by
+  `main/index.ts` (BrowserWindow `icon` + `app.dock.setIcon` for unpackaged macOS runs).
 - Pre-connection scripts run in the user's shell with full env — treat connection files as
   trusted input.

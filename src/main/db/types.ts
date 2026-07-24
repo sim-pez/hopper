@@ -33,4 +33,6 @@ export interface Driver {
   applyChanges(payload: ApplyChangesPayload): Promise<number>
 
   query(sql: string): Promise<QueryResult>
+  /** Cancel whatever `query()` call is currently in flight, if any. No-op otherwise. */
+  cancelCurrent(): Promise<void>
 }

@@ -49,9 +49,18 @@ export interface ConnectionInput extends Omit<ConnectionConfig, 'id' | 'createdA
   password?: string
 }
 
-/** Connection as returned to the renderer — never carries the password. */
+/** Connection as returned to the renderer by list/save — never carries the password. */
 export interface ConnectionView extends ConnectionConfig {
   hasPassword: boolean
+}
+
+/** Full connection settings as shown in the form's JSON box and shared between
+ *  machines. Unlike `ConnectionView` this DOES carry the plaintext password —
+ *  it is only produced by the explicit `connections.exportConfig` call. Identity
+ *  (`id`) and timestamps are omitted so an imported config can be saved as a new
+ *  connection or applied onto an existing one. */
+export interface ConnectionExport extends Omit<ConnectionConfig, 'id' | 'createdAt' | 'updatedAt'> {
+  password?: string
 }
 
 export type ConnectionState = 'disconnected' | 'starting-script' | 'connecting' | 'connected' | 'error'
@@ -151,6 +160,24 @@ export interface QueryHistoryEntry {
   ts: number
 }
 
+/** A named SQL query saved for reuse against a specific connection. */
+export interface SavedQuery {
+  id: string
+  connectionId: string
+  name: string
+  sql: string
+  pinned: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SavedQueryInput {
+  id?: string
+  connectionId: string
+  name: string
+  sql: string
+}
+
 export interface ScriptOutput {
   id: string
   stream: 'stdout' | 'stderr' | 'system'
@@ -175,6 +202,9 @@ export interface Api {
     test: (id: string) => Promise<TestResult>
     /** Test an unsaved draft (runs the pre-script + connects + pings) without persisting it. */
     testDraft: (input: ConnectionInput) => Promise<TestResult>
+    /** Full settings of a saved connection, password included in plaintext, for
+     *  the form's export/import JSON box. */
+    exportConfig: (id: string) => Promise<ConnectionExport>
   }
   db: {
     connect: (id: string) => Promise<ConnectionStatus>
@@ -192,6 +222,8 @@ export interface Api {
     /** Apply staged UPDATE/DELETE changes atomically; returns rows affected. */
     applyChanges: (id: string, payload: ApplyChangesPayload) => Promise<number>
     query: (id: string, sql: string) => Promise<QueryResult>
+    /** Cancel whatever `query()` call is currently in flight on this connection, if any. */
+    cancelQuery: (id: string) => Promise<void>
   }
   scripts: {
     onOutput: (cb: (out: ScriptOutput) => void) => () => void
@@ -208,5 +240,12 @@ export interface Api {
   system: {
     /** Host aliases parsed from ~/.ssh/config, for the SSH + devcontainer wizard. */
     listSshHosts: () => Promise<string[]>
+  }
+  /** Named queries saved per-connection, optionally pinned. */
+  savedQueries: {
+    list: (connectionId: string) => Promise<SavedQuery[]>
+    save: (input: SavedQueryInput) => Promise<SavedQuery>
+    delete: (id: string) => Promise<void>
+    togglePin: (id: string) => Promise<SavedQuery>
   }
 }
