@@ -6,8 +6,7 @@ import type {
   ConnectionInput,
   DeleteRowPayload,
   InsertRowPayload,
-  QueryHistoryEntry,
-  SavedQueryInput,
+  QueryHistoryInput,
   ScriptOutput,
   TableDataOptions,
   TestResult,
@@ -37,13 +36,14 @@ import { preScriptRunner } from './process/preScriptRunner'
 import { cancelQuery, connect, disconnect, getDriver, getStatus, onStatusChange } from './db/pool'
 import { PostgresDriver } from './db/postgres'
 import { MysqlDriver } from './db/mysql'
-import { addHistory, clearHistory, listHistory } from './store/historyStore'
 import {
-  deleteSavedQuery,
-  listSavedQueries,
-  saveSavedQuery,
-  toggleSavedQueryPin
-} from './store/savedQueriesStore'
+  addHistory,
+  clearHistory,
+  listHistory,
+  migrateHistoryKeys,
+  renameHistoryEntry,
+  toggleHistoryPin
+} from './store/historyStore'
 import { listSshHosts } from './ssh/sshConfig'
 import { resolvePreConnection } from './ssh/resolvePreConnection'
 
@@ -53,10 +53,12 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
-/** Back-fills `workspaceId` on connections saved before workspaces existed, creating
- *  a "Default" workspace to hold them. Nothing is created on a fresh install — the
+/** Migrates stores written by older versions: folds per-table query history into
+ *  the per-connection buckets, and back-fills `workspaceId` on connections saved
+ *  before workspaces existed, creating a "Default" workspace to hold them. Nothing is created on a fresh install — the
  *  UI asks the user to name their first workspace. Must run before the window loads. */
 export async function initStores(): Promise<void> {
+  await migrateHistoryKeys()
   let activeId = await initWorkspaces()
   const orphans = await countConnectionsWithoutWorkspace()
   if (orphans === 0) return
@@ -203,14 +205,12 @@ export function registerIpc(): void {
 
   // --- Query history ---
   ipcMain.handle('history:list', (_e, key: string) => listHistory(key))
-  ipcMain.handle('history:add', (_e, key: string, entries: QueryHistoryEntry[]) => addHistory(key, entries))
+  ipcMain.handle('history:add', (_e, key: string, entries: QueryHistoryInput[]) => addHistory(key, entries))
   ipcMain.handle('history:clear', (_e, key: string) => clearHistory(key))
-
-  // --- Saved queries ---
-  ipcMain.handle('queries:list', (_e, connectionId: string) => listSavedQueries(connectionId))
-  ipcMain.handle('queries:save', (_e, input: SavedQueryInput) => saveSavedQuery(input))
-  ipcMain.handle('queries:delete', (_e, id: string) => deleteSavedQuery(id))
-  ipcMain.handle('queries:togglePin', (_e, id: string) => toggleSavedQueryPin(id))
+  ipcMain.handle('history:togglePin', (_e, key: string, id: string) => toggleHistoryPin(key, id))
+  ipcMain.handle('history:rename', (_e, key: string, id: string, name: string) =>
+    renameHistoryEntry(key, id, name)
+  )
 
   // --- System ---
   ipcMain.handle('system:listSshHosts', () => listSshHosts())

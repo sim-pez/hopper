@@ -9,6 +9,8 @@ import type {
 } from '@shared/types'
 import { buildSshDevcontainerScript, defaultReadyRegex } from '@shared/sshDevcontainerScript'
 import { Modal } from './Modal'
+import { Banner } from './Banner'
+import { AlertTriangle, Check, CheckCircle, Copy, Download } from '../icons'
 import { showToast } from '../toast'
 
 interface Props {
@@ -249,9 +251,25 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
   }
 
   return (
-    <Modal onClose={onClose}>
-        <h3>{editing ? 'Edit connection' : 'New connection'}</h3>
-
+    <Modal
+      onClose={onClose}
+      size="lg"
+      title={editing ? 'Edit connection' : 'New connection'}
+      footer={
+        <>
+          <button className="mini" onClick={onTest} disabled={testing || !form.name}>
+            {testing ? 'Testing…' : 'Test connection'}
+          </button>
+          <div className="spacer" />
+          <button className="mini" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="mini primary" onClick={onSave} disabled={saving || !form.name}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </>
+      }
+    >
         <div className="form-grid">
           <label className="span2">
             Name
@@ -323,16 +341,18 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
             </label>
           </div>
 
-          <label className="span2 inline">
-            <input
-              type="checkbox"
-              checked={form.preConnectionMode === 'ssh-devcontainer'}
-              onChange={(e) => set('preConnectionMode', e.target.checked ? 'ssh-devcontainer' : 'none')}
-            />
-            Use SSH + Devcontainer pre-connection
-          </label>
+          <div className="form-section">
+            <h4 className="form-section-title">Pre-connection</h4>
+            <label className="span2 inline">
+              <input
+                type="checkbox"
+                checked={form.preConnectionMode === 'ssh-devcontainer'}
+                onChange={(e) => set('preConnectionMode', e.target.checked ? 'ssh-devcontainer' : 'none')}
+              />
+              Use SSH + Devcontainer pre-connection
+            </label>
 
-          {form.preConnectionMode === 'ssh-devcontainer' && (
+            {form.preConnectionMode === 'ssh-devcontainer' && (
             <>
               <label>
                 SSH host
@@ -397,20 +417,25 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 <pre className="mono generated-script">{generatedScript}</pre>
               </details>
             </>
-          )}
+            )}
+          </div>
 
+          <div className="form-section">
+            <h4 className="form-section-title">Export / import</h4>
           <label className="span2">
             <div className="json-header">
-              <span>Connection JSON (export / import)</span>
+              <span>Connection JSON</span>
               <div className="json-actions">
-                <button type="button" className="mini" onClick={onCopyJson}>
-                  {copied ? 'Copied!' : 'Copy JSON'}
+                <button type="button" className="mini ghost" onClick={onCopyJson}>
+                  {copied ? <Check /> : <Copy />}
+                  {copied ? 'Copied' : 'Copy'}
                 </button>
-                <button type="button" className="mini" onClick={onDownloadJson}>
-                  Save JSON…
+                <button type="button" className="mini ghost" onClick={onDownloadJson}>
+                  <Download />
+                  Save…
                 </button>
-                <button type="button" className="mini" onClick={() => fileInputRef.current?.click()}>
-                  Load JSON…
+                <button type="button" className="mini ghost" onClick={() => fileInputRef.current?.click()}>
+                  Load…
                 </button>
                 <input
                   ref={fileInputRef}
@@ -432,32 +457,21 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
               value={jsonText}
               onChange={(e) => onJsonChange(e.target.value)}
             />
-            {jsonError && <small className="json-error">{jsonError}</small>}
             <small>
               The whole connection — <strong>password in plaintext included</strong>. Paste or edit here and
               it's applied live to the fields above; Save still has to be pressed.
             </small>
           </label>
+          {jsonError && <Banner kind="warn" message={jsonError} className="span2" />}
+          </div>
         </div>
 
         {test && (
           <div className={`test-result ${test.ok ? 'ok' : 'fail'}`}>
-            {test.ok ? `✓ ${test.message} (${test.latencyMs} ms)` : `✕ ${test.message}`}
+            {test.ok ? <CheckCircle /> : <AlertTriangle />}
+            {test.ok ? `${test.message} (${test.latencyMs} ms)` : test.message}
           </div>
         )}
-
-        <div className="modal-actions">
-          <button className="mini" onClick={onTest} disabled={testing || !form.name}>
-            {testing ? 'Testing…' : 'Test'}
-          </button>
-          <div className="spacer" />
-          <button className="mini" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="mini primary" onClick={onSave} disabled={saving || !form.name}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
     </Modal>
   )
 }

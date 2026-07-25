@@ -10,11 +10,22 @@ interface Options {
   invert?: boolean
 }
 
-/** Drag-to-resize a panel. Returns the current size plus the mousedown handler
- *  to attach to a thin drag-handle element. */
-export function useResizable({ axis, min, max, initial, invert }: Options): [number, { onMouseDown: (e: React.MouseEvent) => void }] {
+interface HandleProps {
+  tabIndex: number
+  onMouseDown: (e: React.MouseEvent) => void
+  onKeyDown: (e: React.KeyboardEvent) => void
+}
+
+const KEY_STEP = 16
+
+/** Drag-to-resize a panel. Returns the current size plus the props to spread
+ *  onto a thin drag-handle element. The handle is focusable and also resizes
+ *  with the arrow keys, so resizing isn't mouse-only. */
+export function useResizable({ axis, min, max, initial, invert }: Options): [number, HandleProps] {
   const [size, setSize] = useState(initial)
   const startRef = useRef({ coord: 0, size: 0 })
+
+  const clamp = (n: number) => Math.min(max, Math.max(min, n))
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -25,7 +36,7 @@ export function useResizable({ axis, min, max, initial, invert }: Options): [num
     const onMouseMove = (ev: MouseEvent) => {
       const coord = axis === 'x' ? ev.clientX : ev.clientY
       const delta = (coord - startRef.current.coord) * (invert ? -1 : 1)
-      setSize(Math.min(max, Math.max(min, startRef.current.size + delta)))
+      setSize(clamp(startRef.current.size + delta))
     }
     const onMouseUp = () => {
       document.body.style.cursor = ''
@@ -37,5 +48,14 @@ export function useResizable({ axis, min, max, initial, invert }: Options): [num
     document.addEventListener('mouseup', onMouseUp)
   }
 
-  return [size, { onMouseDown }]
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const grow = axis === 'x' ? 'ArrowRight' : 'ArrowDown'
+    const shrink = axis === 'x' ? 'ArrowLeft' : 'ArrowUp'
+    if (e.key !== grow && e.key !== shrink) return
+    e.preventDefault()
+    const dir = (e.key === grow ? 1 : -1) * (invert ? -1 : 1)
+    setSize((s) => clamp(s + dir * KEY_STEP))
+  }
+
+  return [size, { tabIndex: 0, onMouseDown, onKeyDown }]
 }

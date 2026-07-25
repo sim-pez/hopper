@@ -7,8 +7,11 @@ import { TableTabView } from './components/TableTabView'
 import { QueryTabView } from './components/QueryTabView'
 import { ResultTabView } from './components/ResultTabView'
 import { ScriptConsole } from './components/ScriptConsole'
+import { ConsoleBar } from './components/ConsoleBar'
 import { TitleBar } from './components/TitleBar'
 import { ToastHost } from './components/ToastHost'
+import { EmptyState } from './components/EmptyState'
+import { Table } from './icons'
 import type { ConnectionView } from '@shared/types'
 
 export function App(): JSX.Element {
@@ -41,13 +44,14 @@ export function App(): JSX.Element {
             {activeTab?.kind === 'query' && <QueryTabView key={activeTab.id} tab={activeTab} />}
             {activeTab?.kind === 'result' && <ResultTabView key={activeTab.id} tab={activeTab} />}
             {!activeTab && (
-              <div className="empty-state">
-                <h2>No tab open</h2>
-                <p>Connect to a database in the sidebar, then open a table or start a query to see data here.</p>
-              </div>
+              <EmptyState
+                icon={<Table size={30} />}
+                title="Nothing open"
+                hint="Connect to a database in the sidebar, then pick a table or run a query to see data here."
+              />
             )}
           </div>
-          {consoleConnectionId && <ScriptConsole connectionId={consoleConnectionId} />}
+          {consoleConnectionId ? <ScriptConsole connectionId={consoleConnectionId} /> : <ConsoleBar />}
         </main>
       </div>
       {editing !== null && (

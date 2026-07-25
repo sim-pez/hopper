@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Workspace } from '@shared/types'
 import { Modal } from './Modal'
+import { Banner } from './Banner'
 
 interface Props {
   /** Workspace being renamed, or null when creating one. */
@@ -31,23 +32,13 @@ export function WorkspaceDialog({ workspace, required, onClose, onSaved }: Props
   }
 
   return (
-    <Modal onClose={onClose} className="workspace-modal" dismissible={!required}>
-        <h3>{workspace ? 'Rename workspace' : 'New workspace'}</h3>
-        {required && !workspace && (
-          <p className="hint">Connections live in a workspace. Create one to get started.</p>
-        )}
-        <label>
-          Name
-          <input
-            autoFocus
-            value={name}
-            placeholder="Production"
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
-          />
-        </label>
-        {error && <div className="conn-error">{error}</div>}
-        <div className="modal-actions">
+    <Modal
+      onClose={onClose}
+      title={workspace ? 'Rename workspace' : 'New workspace'}
+      size="sm"
+      dismissible={!required}
+      footer={
+        <>
           <div className="spacer" />
           {!required && (
             <button className="mini" onClick={onClose} disabled={saving}>
@@ -57,7 +48,25 @@ export function WorkspaceDialog({ workspace, required, onClose, onSaved }: Props
           <button className="mini primary" onClick={submit} disabled={saving || !name.trim()}>
             {workspace ? 'Rename' : 'Create'}
           </button>
-        </div>
+        </>
+      }
+    >
+      {required && !workspace && (
+        <p className="hint">Connections live in a workspace. Create one to get started.</p>
+      )}
+      <div className="form-grid">
+        <label className="span2">
+          Name
+          <input
+            autoFocus
+            value={name}
+            placeholder="Production"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+        </label>
+      </div>
+      {error && <Banner message={error} />}
     </Modal>
   )
 }

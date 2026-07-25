@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ResultTab } from '../store'
 import { DataGrid } from './DataGrid'
 import { downloadCsv, downloadXlsx } from '../utils'
+import { Download } from '../icons'
 
 interface Props {
   tab: ResultTab
@@ -41,6 +42,7 @@ export function ResultTabView({ tab }: Props): JSX.Element {
               <option value="csv">CSV</option>
             </select>
             <button className="mini" onClick={doExport}>
+              <Download />
               Export
             </button>
           </>

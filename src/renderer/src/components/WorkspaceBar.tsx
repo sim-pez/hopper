@@ -3,6 +3,7 @@ import type { Workspace } from '@shared/types'
 import { useStore } from '../store'
 import { WorkspaceDialog } from './WorkspaceDialog'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Pencil, Plus, Trash } from '../icons'
 
 /** Active-workspace picker plus create / rename / delete of workspaces. */
 export function WorkspaceBar(): JSX.Element {
@@ -43,29 +44,37 @@ export function WorkspaceBar(): JSX.Element {
           ))}
         </select>
         <div className="icon-group">
-          <button className="icon-btn-sm" title="New workspace" onClick={() => setEditing('new')}>
-            +
+          <button
+            className="icon-btn-sm"
+            title="New workspace"
+            aria-label="New workspace"
+            onClick={() => setEditing('new')}
+          >
+            <Plus />
           </button>
           <button
             className="icon-btn-sm"
             title="Rename workspace"
+            aria-label="Rename workspace"
             onClick={() => setEditing(active)}
             disabled={!active}
           >
-            ✎
+            <Pencil />
           </button>
           <button
             className="icon-btn-sm danger"
             title="Delete workspace"
+            aria-label="Delete workspace"
             onClick={() => setConfirmingRemove(true)}
             disabled={!active}
           >
-            ✕
+            <Trash />
           </button>
         </div>
       </div>
       {confirmingRemove && active && (
         <ConfirmDialog
+          title="Delete workspace"
           message={`Delete workspace "${active.name}"${
             connections.length ? ` and its ${connections.length} connection${connections.length > 1 ? 's' : ''}` : ''
           }?`}

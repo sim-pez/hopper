@@ -175,28 +175,21 @@ export interface InsertRowPayload {
   values: Record<string, unknown>
 }
 
-/** One SQL statement previously run against a table, for the history panel. */
+/** One SQL statement previously run, for the history panel. Pinned entries sort
+ *  to the top, survive the cap and "clear history", and can carry a name. */
 export interface QueryHistoryEntry {
+  id: string
   sql: string
   ts: number
+  pinned?: boolean
+  /** Label shown instead of the timestamp. Only set while pinned. */
+  name?: string
 }
 
-/** A named SQL query saved for reuse against a specific connection. */
-export interface SavedQuery {
-  id: string
-  connectionId: string
-  name: string
+/** A statement being recorded — the store assigns the id. */
+export interface QueryHistoryInput {
   sql: string
-  pinned: boolean
-  createdAt: number
-  updatedAt: number
-}
-
-export interface SavedQueryInput {
-  id?: string
-  connectionId: string
-  name: string
-  sql: string
+  ts: number
 }
 
 export interface ScriptOutput {
@@ -263,25 +256,27 @@ export interface Api {
     onOutput: (cb: (out: ScriptOutput) => void) => () => void
     onStatus: (cb: (status: ConnectionStatus) => void) => () => void
   }
-  /** Per-table query history (capped to the last 100 entries per table). */
+  /** Query history, bucketed by key (100 unpinned entries per key; pinned ones
+   *  are never dropped). Every call returns the updated list: pinned first,
+   *  newest first within each group. */
   history: {
-    /** `key` is `${connectionId}:${schema}:${table}`. Newest first. */
+    /** `key` is `${connectionId}:${schema}:${table}` for a table, or
+     *  `${connectionId}:__query__` for statements run in the console. */
     list: (key: string) => Promise<QueryHistoryEntry[]>
-    /** Append statements; returns the updated (capped) list, newest first. */
-    add: (key: string, entries: QueryHistoryEntry[]) => Promise<QueryHistoryEntry[]>
+    /** Record statements. Re-running one moves the existing entry up instead of
+     *  duplicating it. */
+    add: (key: string, entries: QueryHistoryInput[]) => Promise<QueryHistoryEntry[]>
+    /** Drops the unpinned entries; pinned ones are kept. */
     clear: (key: string) => Promise<void>
+    /** Pin/unpin an entry. Unpinning also drops its name. */
+    togglePin: (key: string, id: string) => Promise<QueryHistoryEntry[]>
+    /** Name a pinned entry. */
+    rename: (key: string, id: string, name: string) => Promise<QueryHistoryEntry[]>
   }
   system: {
     /** Host aliases parsed from ~/.ssh/config, for the SSH + devcontainer wizard. */
     listSshHosts: () => Promise<string[]>
     /** `process.platform`, so the renderer can leave room for macOS traffic lights. */
     platform: string
-  }
-  /** Named queries saved per-connection, optionally pinned. */
-  savedQueries: {
-    list: (connectionId: string) => Promise<SavedQuery[]>
-    save: (input: SavedQueryInput) => Promise<SavedQuery>
-    delete: (id: string) => Promise<void>
-    togglePin: (id: string) => Promise<SavedQuery>
   }
 }

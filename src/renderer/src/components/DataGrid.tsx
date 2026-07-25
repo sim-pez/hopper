@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ColumnMeta } from '@shared/types'
 import { displayValue, isNull } from '../utils'
+import { ChevronDown, ChevronUp, RotateCcw, Search, X } from '../icons'
 
 interface Props {
   columns: ColumnMeta[]
@@ -77,101 +78,115 @@ export function DataGrid({
         <thead>
           <tr>
             <th className="rownum" />
-            {columns.map((col) => (
-              <th key={col.name} title={col.dataType}>
-                <span className="th-inner">
-                  <span
-                    className={onSort ? 'th-label sortable' : 'th-label'}
-                    onClick={() => onSort?.(col.name)}
-                  >
-                    {col.name}
-                    {sortState?.column === col.name && (
-                      <span className="sort-ind">{sortState.desc ? ' ▼' : ' ▲'}</span>
+            {columns.map((col) => {
+              const sorted = sortState?.column === col.name
+              return (
+                <th
+                  key={col.name}
+                  title={col.dataType}
+                  aria-sort={sorted ? (sortState!.desc ? 'descending' : 'ascending') : undefined}
+                >
+                  <span className="th-inner">
+                    <span
+                      className={onSort ? 'th-label sortable' : 'th-label'}
+                      onClick={() => onSort?.(col.name)}
+                    >
+                      {col.name}
+                      {sorted &&
+                        (sortState!.desc ? (
+                          <ChevronDown className="sort-ind" size={12} />
+                        ) : (
+                          <ChevronUp className="sort-ind" size={12} />
+                        ))}
+                    </span>
+                    {onSearchColumn && (
+                      <button
+                        className="th-search"
+                        title={`Filter ${col.name} (LIKE)`}
+                        aria-label={`Filter ${col.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSearchColumn(col.name)
+                        }}
+                      >
+                        <Search size={12} />
+                      </button>
                     )}
                   </span>
-                  {onSearchColumn && (
-                    <button
-                      className="th-search"
-                      title={`Filter ${col.name} (LIKE)`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onSearchColumn(col.name)
-                      }}
-                    >
-                      🔍
-                    </button>
-                  )}
-                </span>
-              </th>
-            ))}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, r) => {
             const deleted = isDeleted?.(r) ?? false
             return (
-            <tr key={r} className={deleted ? 'row-deleted' : ''}>
-              <td className="rownum">
-                {onDeleteRow && editable ? (
-                  <button
-                    className="row-del"
-                    title={deleted ? 'Undo delete' : 'Delete row'}
-                    onClick={() => onDeleteRow(r)}
-                  >
-                    {deleted ? '↺' : '✕'}
-                  </button>
-                ) : (
-                  r + 1
-                )}
-              </td>
-              {columns.map((_, c) => {
-                const isSel = sel?.r === r && sel?.c === c
-                const isEditing = editing?.r === r && editing?.c === c
-                const dirty = isDirty?.(r, c) ?? false
-                const value = row[c]
-                const text = displayValue(value)
-                return (
-                  <td
-                    key={c}
-                    tabIndex={0}
-                    className={`cell ${isSel ? 'sel' : ''} ${editable ? 'editable' : ''} ${dirty ? 'dirty' : ''}`}
-                    onClick={() => setSel({ r, c })}
-                    onDoubleClick={() => startEdit(r, c)}
-                    onKeyDown={(e) => onCellKey(e, r, c)}
-                  >
-                    {isEditing ? (
-                      <input
-                        ref={inputRef}
-                        className="cell-input"
-                        value={editing.text}
-                        onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-                        onBlur={commit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            commit()
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault()
-                            setEditing(null)
-                          }
-                        }}
-                      />
-                    ) : isNull(value) ? (
-                      <span className="null">NULL</span>
-                    ) : (
-                      <span className="cell-text" title={text}>{text}</span>
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
+              <tr key={r} className={deleted ? 'row-deleted' : ''}>
+                <td className="rownum">
+                  {onDeleteRow && editable ? (
+                    <button
+                      className="row-del"
+                      title={deleted ? 'Undo delete' : 'Delete row'}
+                      aria-label={deleted ? `Undo delete of row ${r + 1}` : `Delete row ${r + 1}`}
+                      onClick={() => onDeleteRow(r)}
+                    >
+                      {deleted ? <RotateCcw size={12} /> : <X size={12} />}
+                    </button>
+                  ) : (
+                    r + 1
+                  )}
+                </td>
+                {columns.map((_, c) => {
+                  const isSel = sel?.r === r && sel?.c === c
+                  const isEditing = editing?.r === r && editing?.c === c
+                  const dirty = isDirty?.(r, c) ?? false
+                  const value = row[c]
+                  const text = displayValue(value)
+                  return (
+                    <td
+                      key={c}
+                      tabIndex={0}
+                      className={`cell ${isSel ? 'sel' : ''} ${editable ? 'editable' : ''} ${dirty ? 'dirty' : ''}`}
+                      onClick={() => setSel({ r, c })}
+                      onDoubleClick={() => startEdit(r, c)}
+                      onKeyDown={(e) => onCellKey(e, r, c)}
+                    >
+                      {isEditing ? (
+                        <input
+                          ref={inputRef}
+                          className="cell-input"
+                          value={editing.text}
+                          onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+                          onBlur={commit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              commit()
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault()
+                              setEditing(null)
+                            }
+                          }}
+                        />
+                      ) : isNull(value) ? (
+                        <span className="null">NULL</span>
+                      ) : (
+                        <span className="cell-text" title={text}>
+                          {text}
+                        </span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
             )
           })}
           {rows.length === 0 && (
             <tr>
               <td className="rownum" />
               <td className="empty-row" colSpan={columns.length}>
-                no rows
+                No rows
               </td>
             </tr>
           )}

@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { ColumnMeta, QueryResult } from '@shared/types'
 import { useStore } from '../store'
 import { SqlEditor } from './SqlEditor'
-import { SavedQueriesPanel } from './SavedQueriesPanel'
-import { SaveQueryDialog } from './SaveQueryDialog'
+import { HistoryPanel } from './HistoryPanel'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Banner } from './Banner'
 import { useDbMetadata } from '../hooks/useDbMetadata'
 import { useResizable } from '../hooks/useResizable'
-import { uid, noWhereGuard } from '../utils'
+import { errorText, historyKey, noWhereGuard, uid } from '../utils'
+import { ChevronDown, ChevronUp, Clock, Play, Stop, Terminal } from '../icons'
 
 interface Props {
   connectionId: string
@@ -20,6 +21,8 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const conn = useStore((s) => s.connections.find((c) => c.id === connectionId))
   const status = useStore((s) => s.statuses[connectionId])
   const showConsole = useStore((s) => s.showConsole)
+  const scriptLogVisible = useStore((s) => s.scriptLogVisible)
+  const toggleScriptLog = useStore((s) => s.toggleScriptLog)
   const openTab = useStore((s) => s.openTab)
   const connected = status?.state === 'connected'
   const { words, tableRefs } = useDbMetadata(connectionId, connected)
@@ -28,21 +31,14 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const [showSaved, setShowSaved] = useState(false)
-  const [showSaveAs, setShowSaveAs] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [pendingRun, setPendingRun] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
-  const historyKey = `${connectionId}:__query__`
   const [height, resizeHandle] = useResizable({ axis: 'y', min: 140, max: 640, initial: 260, invert: true })
 
   const cancel = async () => {
     await window.api.db.cancelQuery(connectionId)
-  }
-
-  const save = async (name: string) => {
-    setShowSaveAs(false)
-    await window.api.savedQueries.save({ connectionId, name, sql: sql.trim() })
   }
 
   // Result sets open in their own tab; the console only reports non-result outcomes.
@@ -51,9 +47,13 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     openTab({ kind: 'result', id: uid(), connectionId, title: title || 'result', sql: querySql, result })
   }
 
+  // The script log is collapsible on its own, so the SQL editor can stay open
+  // with the port-forward noise out of the way.
+  const logShown = logs.length > 0 && scriptLogVisible
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' })
-  }, [logs.length])
+    if (logShown) endRef.current?.scrollIntoView({ block: 'end' })
+  }, [logs.length, logShown])
 
   // Handle psql-style `\d` meta-commands client-side using cached metadata.
   const runMetaCommand = async (cmd: string): Promise<QueryResult> => {
@@ -81,14 +81,18 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   }
 
   const doRun = async (trimmed: string) => {
+    // Clear the previous run's outcome up front: a stale "N row(s) affected"
+    // left next to a failed run reads as if nothing happened.
+    setMessage(null)
+    setLastMs(null)
+
     if (trimmed.startsWith('\\')) {
       setRunning(true)
       setError(null)
       try {
         openResultTab(trimmed, await runMetaCommand(trimmed))
-        setMessage(null)
       } catch (e) {
-        setError(String(e))
+        setError(errorText(e))
       } finally {
         setRunning(false)
       }
@@ -97,20 +101,20 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
 
     setRunning(true)
     setError(null)
+    // Recorded before running: a statement that fails or is cancelled is exactly
+    // the one worth pulling back out of history.
+    void window.api.history.add(historyKey(connectionId), [{ sql: trimmed, ts: Date.now() }])
     try {
       const res = await window.api.db.query(connectionId, trimmed)
-      void window.api.history.add(historyKey, [{ sql: trimmed, ts: Date.now() }])
       setLastMs(res.durationMs ?? null)
       if (res.columns.length > 0) {
         // A result set — show it in a dedicated tab, keep the console compact.
         openResultTab(trimmed, res)
-        setMessage(null)
       } else {
         setMessage(`${res.command ?? 'OK'} · ${res.rowCount} row(s) affected`)
       }
     } catch (e) {
-      setError(String(e))
-      setLastMs(null)
+      setError(errorText(e))
     } finally {
       setRunning(false)
     }
@@ -127,19 +131,40 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   }
 
   return (
-    <div className={`console ${logs.length > 0 ? '' : 'compact'}`} style={logs.length > 0 ? { height } : undefined}>
-      {logs.length > 0 && <div className="resize-handle-y" onMouseDown={resizeHandle.onMouseDown} />}
+    <div className={`console ${logShown ? '' : 'compact'}`} style={logShown ? { height } : undefined}>
+      {logShown && (
+        <div
+          className="resize-handle-y"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize console"
+          {...resizeHandle}
+        />
+      )}
       <div className="console-header">
-        <span>
-          Query · {conn?.name ?? connectionId}
-          {status?.scriptRunning && <span className="running-badge">script running</span>}
+        <span className="console-title">
+          <Terminal size={13} />
+          {conn?.name ?? connectionId}
+          {status?.scriptRunning && <span className="badge running">script running</span>}
         </span>
-        <button className="btn-icon" onClick={() => showConsole(null)} title="Hide">
-          ▾
-        </button>
+        <div className="console-header-right">
+          {logs.length > 0 && (
+            <button
+              className="mini"
+              onClick={toggleScriptLog}
+              title={scriptLogVisible ? 'Hide script log' : 'Show script log'}
+            >
+              {scriptLogVisible ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              Log
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => showConsole(null)} title="Hide console" aria-label="Hide console">
+            <ChevronDown size={15} />
+          </button>
+        </div>
       </div>
 
-      {logs.length > 0 && (
+      {logShown && (
         <div className="console-log mono">
           {logs.map((l, i) => (
             <div key={i} className={`log-line ${l.stream}`}>
@@ -159,12 +184,18 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         placeholder="Write SQL command"
       />
 
+      {/* Above the toolbar: at the bottom of the console it sits on the window
+          edge, where a failed run is easy to miss. */}
+      {error && <Banner message={error} onDismiss={() => setError(null)} />}
+
       <div className="toolbar">
-        <button className="mini primary" onClick={run} disabled={running || !connected}>
-          {running ? 'Running…' : '▶ Run (⌘↵)'}
+        <button className="mini primary" onClick={run} disabled={running || !connected} title="Run (⌘↵)">
+          <Play />
+          {running ? 'Running…' : 'Run'}
         </button>
         {running && (
           <button className="mini danger" onClick={cancel}>
+            <Stop />
             Cancel
           </button>
         )}
@@ -172,27 +203,27 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         {lastMs != null && <span className="muted">{lastMs} ms</span>}
         <div className="spacer" />
         <span className="muted">results open in a new tab</span>
-        <button className="mini" title="Save this query for reuse" onClick={() => setShowSaveAs(true)} disabled={!sql.trim()}>
-          ☆ Save
-        </button>
-        <button className="mini" title="Saved queries" onClick={() => setShowSaved(true)}>
-          Saved
+        <button
+          className="mini"
+          title="Statements run on this connection"
+          onClick={() => setShowHistory(true)}
+        >
+          <Clock />
+          History
         </button>
       </div>
 
-      {error && <div className="error-bar">{error}</div>}
-
-      {showSaved && (
-        <SavedQueriesPanel
-          connectionId={connectionId}
+      {showHistory && (
+        <HistoryPanel
+          bucket={historyKey(connectionId)}
           title={conn?.name ?? connectionId}
-          onClose={() => setShowSaved(false)}
+          onClose={() => setShowHistory(false)}
           onSelect={setSql}
         />
       )}
-      {showSaveAs && <SaveQueryDialog onCancel={() => setShowSaveAs(false)} onSave={save} />}
       {pendingRun && (
         <ConfirmDialog
+          title="No WHERE clause"
           message={`This ${noWhereGuard(pendingRun)} has no WHERE clause and will affect EVERY row. Run it anyway?`}
           confirmLabel="Run anyway"
           onCancel={() => setPendingRun(null)}

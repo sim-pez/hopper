@@ -6,7 +6,7 @@ import type {
   ConnectionStatus,
   DeleteRowPayload,
   InsertRowPayload,
-  SavedQueryInput,
+  QueryHistoryInput,
   ScriptOutput,
   TableDataOptions,
   UpdateCellPayload,
@@ -64,18 +64,14 @@ const api: Api = {
   },
   history: {
     list: (key: string) => ipcRenderer.invoke('history:list', key),
-    add: (key: string, entries) => ipcRenderer.invoke('history:add', key, entries),
-    clear: (key: string) => ipcRenderer.invoke('history:clear', key)
+    add: (key: string, entries: QueryHistoryInput[]) => ipcRenderer.invoke('history:add', key, entries),
+    clear: (key: string) => ipcRenderer.invoke('history:clear', key),
+    togglePin: (key: string, id: string) => ipcRenderer.invoke('history:togglePin', key, id),
+    rename: (key: string, id: string, name: string) => ipcRenderer.invoke('history:rename', key, id, name)
   },
   system: {
     listSshHosts: () => ipcRenderer.invoke('system:listSshHosts'),
     platform: process.platform
-  },
-  savedQueries: {
-    list: (connectionId: string) => ipcRenderer.invoke('queries:list', connectionId),
-    save: (input: SavedQueryInput) => ipcRenderer.invoke('queries:save', input),
-    delete: (id: string) => ipcRenderer.invoke('queries:delete', id),
-    togglePin: (id: string) => ipcRenderer.invoke('queries:togglePin', id)
   }
 }
 

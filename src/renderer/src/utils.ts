@@ -66,6 +66,14 @@ export function downloadCsv(filename: string, columns: ColumnMeta[], rows: unkno
   URL.revokeObjectURL(url)
 }
 
+/** The message a failed `window.api` call should show, with Electron's IPC
+ *  wrapper ("Error invoking remote method 'db:query': …") stripped off so the
+ *  driver's own wording is what the user reads. */
+export function errorText(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  return raw.replace(/^(?:Error: )?Error invoking remote method '[^']*': /, '').replace(/^Error: /, '')
+}
+
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
 }
@@ -84,4 +92,11 @@ export function sqlLiteral(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
   const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
   return `'${s.replace(/'/g, "''")}'`
+}
+
+/** History bucket for a connection. History is per-database — every statement
+ *  run against it (console, query tab, or a grid edit) lands in the same list,
+ *  reachable from that connection's console. */
+export function historyKey(connectionId: string): string {
+  return `${connectionId}:__query__`
 }

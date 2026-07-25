@@ -65,21 +65,32 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
   one exception is `initStores()` (main entry, before the window opens): if connections predate
   workspaces it makes a "Default" workspace to hold them. Deleting a workspace deletes its
   connections; `workspaceId` is not part of `ConnectionExport`.
-- **Color lives on the workspace, never on a connection** (`Workspace.color`, swatches in
-  `renderer/src/colors.ts`). It drives the title bar and the sidebar dots.
-- **Electron has no `window.prompt`** — it throws. Use a modal (see `WorkspaceDialog`);
-  `confirm()`/`alert()` are fine.
-- **The title bar is renderer-drawn** (`TitleBar.tsx`, `titleBarStyle: 'hidden'`) so it can be
-  tinted with the active workspace's color. Keep `--titlebar-h` in `styles.css` in sync with
-  `TITLE_BAR_HEIGHT` in `main/index.ts`, and keep `-webkit-app-region: drag` on the bar (add
-  `no-drag` to anything clickable put there). macOS shows the traffic lights over it
-  (`trafficLightPosition` + the `.titlebar.mac` left padding); Windows/Linux use the controls
-  overlay, recolored through `window:setAccentColor`.
+- **Query history is per connection**, not per tab or table: everything (console runs,
+  query tabs, grid edits) is recorded under `historyKey(connectionId)` and read back from
+  the console's History button — the only place it is shown. It persists in
+  `query-history.json`; pinned entries sort first, survive the 100-entry cap and "clear",
+  and can be named (there is no separate "saved queries" feature).
+- **Electron has no `window.prompt`/`confirm`/`alert` in this app** — `window.prompt` throws, and
+  the others are banned because they block. Use `Modal` and its wrappers: `ConfirmDialog`,
+  `NameQueryDialog`, `WorkspaceDialog`.
+- **The title bar is renderer-drawn** (`TitleBar.tsx`, `titleBarStyle: 'hidden'`). Keep
+  `--titlebar-h` in `styles.css` in sync with `TITLE_BAR_HEIGHT` in `main/index.ts`, and keep
+  `-webkit-app-region: drag` on the bar (add `no-drag` to anything clickable put there). macOS
+  shows the traffic lights over it (`trafficLightPosition` + the `.titlebar.mac` left padding).
 - **Grid rows are arrays** (`unknown[][]`) aligned to `columns`; primary-key values are read
   by column index. Editing needs a PK — `TableData.editable` gates it.
 - **New IPC call:** add to the `Api` interface in `shared/types.ts`, implement the handler in
   `ipc.ts`, and wire it in `preload/index.ts`. Keep all three in sync.
-- Match the existing dark theme in `styles.css` (CSS variables at `:root`); UI text is terse.
+- **Style with the tokens, never raw values.** `styles.css` §1 defines every color, spacing
+  (`--space-1..6`), type size (`--text-2xs..lg`), radius (`--r-sm/md/lg/full`), elevation
+  (`--shadow-1/2`, `--ring`) and duration (`--dur`, `--dur-fast`, `--ease-out`) the UI is allowed
+  to use. A one-off px value means a missing token. Dark-only; UI text is terse and sentence-case.
+- **Icons come from `renderer/src/icons.tsx`** — bundled inline SVG (the CSP blocks remote
+  assets). No emoji or Unicode glyphs in JSX. Icons are `aria-hidden`, so an icon-only button
+  needs its own `aria-label` next to the `title`.
+- **One surface per kind of feedback:** `Banner` for an in-place failure, `showToast` for the
+  outcome of a write, `Skeleton` for a first load, `LoadingOverlay` for a refetch over data that
+  is already on screen, `EmptyState` for "nothing here yet".
 
 ## Notes
 

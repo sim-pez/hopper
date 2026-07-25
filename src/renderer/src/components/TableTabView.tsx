@@ -4,10 +4,12 @@ import type { TableTab } from '../store'
 import { DataGrid } from './DataGrid'
 import { InsertRowDialog } from './InsertRowDialog'
 import { ConfirmChangesDialog } from './ConfirmChangesDialog'
-import { HistoryPanel } from './HistoryPanel'
 import { LoadingOverlay } from './LoadingOverlay'
-import { downloadXlsx, parseEdit, sqlLiteral } from '../utils'
+import { Banner } from './Banner'
+import { Skeleton } from './Skeleton'
+import { downloadXlsx, errorText, historyKey, parseEdit, sqlLiteral } from '../utils'
 import { showToast } from '../toast'
+import { ArrowLeft, ArrowRight, Download, Filter, Plus, RefreshCw, X } from '../icons'
 
 interface Props {
   tab: TableTab
@@ -34,13 +36,11 @@ export function TableTabView({ tab }: Props): JSX.Element {
   const [deletes, setDeletes] = useState<Set<number>>(new Set())
   const [preview, setPreview] = useState<string[] | null>(null)
   const [saving, setSaving] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
 
-  const historyKey = `${tab.connectionId}:${tab.schema}:${tab.table}`
   const recordHistory = (statements: string[]) => {
     const ts = Date.now()
     void window.api.history.add(
-      historyKey,
+      historyKey(tab.connectionId),
       statements.map((sql) => ({ sql, ts }))
     )
   }
@@ -60,7 +60,7 @@ export function TableTabView({ tab }: Props): JSX.Element {
       setEdits({})
       setDeletes(new Set())
     } catch (e) {
-      setError(String(e))
+      setError(errorText(e))
     } finally {
       setLoading(false)
     }
@@ -192,28 +192,33 @@ export function TableTabView({ tab }: Props): JSX.Element {
           onClick={load}
           disabled={loading}
         >
-          ↻ Refresh
+          <RefreshCw />
+          Refresh
         </button>
 
-        <button
-          className="mini"
-          title="Previous page"
-          disabled={offset === 0 || loading}
-          onClick={() => setOffset(Math.max(0, offset - limit))}
-        >
-          ◀ Prev
-        </button>
-        <span className="page-info">
-          rows {offset + 1}–{offset + rows.length} of {data?.totalRows ?? '…'}
-        </span>
-        <button
-          className="mini"
-          title="Next page"
-          disabled={rows.length < limit || loading}
-          onClick={() => setOffset(offset + limit)}
-        >
-          Next ▶
-        </button>
+        <div className="toolbar-group">
+          <button
+            className="mini"
+            title="Previous page"
+            aria-label="Previous page"
+            disabled={offset === 0 || loading}
+            onClick={() => setOffset(Math.max(0, offset - limit))}
+          >
+            <ArrowLeft />
+          </button>
+          <span className="page-info">
+            {rows.length ? `${offset + 1}–${offset + rows.length}` : '0'} of {data?.totalRows ?? '…'}
+          </span>
+          <button
+            className="mini"
+            title="Next page"
+            aria-label="Next page"
+            disabled={rows.length < limit || loading}
+            onClick={() => setOffset(offset + limit)}
+          >
+            <ArrowRight />
+          </button>
+        </div>
         <label className="inline">
           Limit
           <select className="limit-select" value={limit} onChange={(e) => { setOffset(0); setLimit(Number(e.target.value)) }}>
@@ -229,11 +234,12 @@ export function TableTabView({ tab }: Props): JSX.Element {
 
         {data?.editable ? (
           <button className="mini outline" onClick={() => setShowInsert(true)}>
-            + Add row
+            <Plus />
+            Add row
           </button>
         ) : (
           <span className="ro-note" title="Editing needs a primary key (or connection is read-only)">
-            read-only
+            Read-only
           </span>
         )}
         {data?.editable && pending && (
@@ -256,18 +262,17 @@ export function TableTabView({ tab }: Props): JSX.Element {
           disabled={!data}
           onClick={() => data && downloadXlsx(`${tab.table}.xlsx`, data.columns, rows)}
         >
-          Export XLSX
+          <Download />
+          XLSX
         </button>
-        <button className="mini" title="Query history for this table" onClick={() => setShowHistory(true)}>
-          History
-        </button>
-
-        {data && <span className="muted">{data.durationMs} ms</span>}
       </div>
 
       {filters.length > 0 && (
         <div className="filter-bar">
-          <span className="filter-label">Filters (match any):</span>
+          <span className="filter-label">
+            <Filter size={12} />
+            Match any:
+          </span>
           {filters.map((f, i) => (
             <span key={`${f.column}-${i}`} className="filter-chip">
               <span className="filter-col">{f.column} ~</span>
@@ -282,11 +287,12 @@ export function TableTabView({ tab }: Props): JSX.Element {
                 onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
               />
               <button
-                className="filter-x"
-                title="Remove"
+                className="icon-btn-sm"
+                title="Remove filter"
+                aria-label={`Remove filter on ${f.column}`}
                 onClick={() => setFilters((prev) => prev.filter((_, j) => j !== i))}
               >
-                ✕
+                <X size={11} />
               </button>
             </span>
           ))}
@@ -299,7 +305,9 @@ export function TableTabView({ tab }: Props): JSX.Element {
         </div>
       )}
 
-      {error && <div className="error-bar">{error}</div>}
+      {error && <Banner message={error} onRetry={load} />}
+
+      {!data && loading && <Skeleton rows={8} />}
 
       {data && (
         <div className="grid-relative">
@@ -344,10 +352,6 @@ export function TableTabView({ tab }: Props): JSX.Element {
           onCancel={() => setPreview(null)}
           onConfirm={onConfirmSave}
         />
-      )}
-
-      {showHistory && (
-        <HistoryPanel tableKey={historyKey} title={tab.table} onClose={() => setShowHistory(false)} />
       )}
     </div>
   )

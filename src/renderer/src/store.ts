@@ -48,6 +48,11 @@ interface AppState {
   tabs: Tab[]
   activeTabId: string | null
   consoleConnectionId: string | null // which connection's script console is shown
+  /** The console that was last open, so hiding it leaves something to reopen. */
+  lastConsoleConnectionId: string | null
+  /** Whether the script log pane inside the console is shown. Independent of the
+   *  console itself, so the SQL editor can stay up with the log collapsed. */
+  scriptLogVisible: boolean
 
   refreshWorkspaces: () => Promise<void>
   /** Switch the active workspace and reload its connections. */
@@ -62,6 +67,7 @@ interface AppState {
   closeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   showConsole: (connectionId: string | null) => void
+  toggleScriptLog: () => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -74,6 +80,8 @@ export const useStore = create<AppState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   consoleConnectionId: null,
+  lastConsoleConnectionId: null,
+  scriptLogVisible: true,
 
   refreshWorkspaces: async () => {
     const [workspaces, activeWorkspaceId] = await Promise.all([
@@ -102,7 +110,9 @@ export const useStore = create<AppState>((set, get) => ({
         : (tabs[tabs.length - 1]?.id ?? null)
       const consoleConnectionId =
         s.consoleConnectionId && ids.has(s.consoleConnectionId) ? s.consoleConnectionId : null
-      return { connections, tabs, activeTabId, consoleConnectionId }
+      const lastConsoleConnectionId =
+        s.lastConsoleConnectionId && ids.has(s.lastConsoleConnectionId) ? s.lastConsoleConnectionId : null
+      return { connections, tabs, activeTabId, consoleConnectionId, lastConsoleConnectionId }
     })
   },
 
@@ -143,5 +153,10 @@ export const useStore = create<AppState>((set, get) => ({
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
-  showConsole: (connectionId) => set({ consoleConnectionId: connectionId })
+  showConsole: (connectionId) =>
+    set((s) => ({
+      consoleConnectionId: connectionId,
+      lastConsoleConnectionId: connectionId ?? s.lastConsoleConnectionId
+    })),
+  toggleScriptLog: () => set((s) => ({ scriptLogVisible: !s.scriptLogVisible }))
 }))
