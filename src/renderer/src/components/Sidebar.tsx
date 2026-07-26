@@ -57,10 +57,12 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
     refreshConnections()
   }
 
-  // SSH + devcontainer scripts are generated at connect time, so an empty
-  // `preScript` still means there is something to run.
+  // SSH + devcontainer and kubectl scripts are generated at connect time, so an
+  // empty `preScript` still means there is something to run.
   const hasPreScript = (c: ConnectionView) =>
-    c.preConnectionMode === 'ssh-devcontainer' || !!c.preScript?.trim()
+    c.preConnectionMode === 'ssh-devcontainer' ||
+    c.preConnectionMode === 'kubectl' ||
+    !!c.preScript?.trim()
 
   const runPending = () => {
     if (!pending) return

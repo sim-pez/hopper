@@ -58,6 +58,17 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
 - **Adding a DB engine:** implement `Driver` (`src/main/db/types.ts`), register it in
   `createDriver()` (`src/main/db/pool.ts`), add the kind to `DriverKind` in `shared/types.ts`
   and the driver `<select>` in `ConnectionForm.tsx`. In MySQL a "schema" == a database.
+- **Pre-connection modes.** `preConnectionMode` picks where `preScript`/`host`/`port` come
+  from. `'none'` runs the saved `preScript` verbatim against the saved host/port.
+  `'ssh-devcontainer'` and `'kubectl'` are *generated*: their script is built from a
+  structured config (`sshDevcontainer` / `kubectl`) by a builder in `shared/`, and
+  `main/ssh/resolvePreConnection.ts` rebuilds it on **every** connect against a freshly
+  picked free local port — so no local port is ever persisted (saved `host`/`port` are
+  placeholders, and two connections can be live at once). Adding a mode: extend the union
+  in `shared/types.ts`, add a `build*Script` + `default*ReadyRegex` in `shared/`, a branch in
+  `resolvePreConnection`, a `MODES`/`MODE_LABELS` entry + field block + type guard (for the
+  JSON import whitelist) in `ConnectionForm.tsx`, and `hasPreScript` in `Sidebar.tsx`.
+  Everything interpolated into a generated script must be shell-quoted — see `sq()`.
 - **Workspaces scope connections.** Every `ConnectionConfig` has a `workspaceId`; exactly one
   workspace is active (`workspaces.json`) and `connections:list` defaults to it, so the sidebar
   only ever shows the active workspace. No workspace is ever created implicitly — with none,
@@ -94,7 +105,6 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
 
 ## Notes
 
-- Not a git repo yet.
 - `out/` is build output (gitignored); the Electron binary downloads lazily on first run.
 - App icon lives in `resources/` (`icon.png` 1024², `icon.icns`, `icon.ico`) and is loaded by
   `main/index.ts` (BrowserWindow `icon` + `app.dock.setIcon` for unpackaged macOS runs).

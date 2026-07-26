@@ -25,9 +25,8 @@ function createWindow(): void {
     backgroundColor: '#1e1e2e',
     title: 'DB Manager',
     icon: appIcon,
-    // The title bar is drawn by the renderer (TitleBar.tsx) so it can carry the
-    // active workspace's color. macOS keeps its traffic lights; Windows/Linux get
-    // the window-controls overlay, recolored via `window:setAccentColor`.
+    // The title bar is drawn by the renderer (TitleBar.tsx). macOS keeps its traffic
+    // lights; Windows/Linux get the window-controls overlay.
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 11, y: 10 },
     titleBarOverlay: { color: '#181825', symbolColor: '#cad3f5', height: TITLE_BAR_HEIGHT },

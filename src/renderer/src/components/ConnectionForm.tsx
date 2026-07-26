@@ -4,10 +4,12 @@ import type {
   ConnectionInput,
   ConnectionView,
   DriverKind,
+  KubectlConfig,
   SshDevcontainerConfig,
   TestResult
 } from '@shared/types'
 import { buildSshDevcontainerScript, defaultReadyRegex } from '@shared/sshDevcontainerScript'
+import { buildKubectlScript, defaultKubectlReadyRegex } from '@shared/kubectlScript'
 import { Modal } from './Modal'
 import { Banner } from './Banner'
 import { AlertTriangle, Check, CheckCircle, Copy, Download } from '../icons'
@@ -28,8 +30,25 @@ const EMPTY_SSH_DEVCONTAINER: SshDevcontainerConfig = {
   remotePort: 5432
 }
 
+const EMPTY_KUBECTL: KubectlConfig = {
+  kubeconfig: '',
+  context: '',
+  namespace: '',
+  target: '',
+  remotePort: 5432
+}
+
 const DRIVERS: DriverKind[] = ['postgres', 'mysql']
-const MODES: NonNullable<ConnectionInput['preConnectionMode']>[] = ['none', 'ssh-devcontainer']
+type PreConnectionMode = NonNullable<ConnectionInput['preConnectionMode']>
+const MODES: PreConnectionMode[] = ['none', 'ssh-devcontainer', 'kubectl']
+const MODE_LABELS: Record<PreConnectionMode, string> = {
+  none: 'None',
+  'ssh-devcontainer': 'SSH + devcontainer',
+  kubectl: 'kubectl port-forward'
+}
+
+/** Modes whose host/port and preScript are generated at connect time. */
+const GENERATED_MODES: PreConnectionMode[] = ['ssh-devcontainer', 'kubectl']
 
 /** The whole connection as JSON — every setting, password included. `id` and the
  *  timestamps are left out so a config can be pasted into any connection. */
@@ -48,7 +67,8 @@ function toExport(f: ConnectionInput): ConnectionExport {
     preScriptReadyRegex: f.preScriptReadyRegex,
     preScriptWaitMs: f.preScriptWaitMs,
     preConnectionMode: f.preConnectionMode,
-    sshDevcontainer: f.sshDevcontainer
+    sshDevcontainer: f.sshDevcontainer,
+    kubectl: f.kubectl
   }
 }
 
@@ -60,6 +80,19 @@ function isSshConfig(v: unknown): v is SshDevcontainerConfig {
     typeof c.sshHost === 'string' &&
     typeof c.workspaceFolder === 'string' &&
     typeof c.portForwardCommand === 'string' &&
+    typeof c.remotePort === 'number'
+  )
+}
+
+function isKubectlConfig(v: unknown): v is KubectlConfig {
+  const c = v as KubectlConfig
+  return (
+    !!c &&
+    typeof c === 'object' &&
+    typeof c.kubeconfig === 'string' &&
+    typeof c.context === 'string' &&
+    typeof c.namespace === 'string' &&
+    typeof c.target === 'string' &&
     typeof c.remotePort === 'number'
   )
 }
@@ -81,12 +114,14 @@ function parseExport(parsed: unknown): Partial<ConnectionInput> | null {
     if (typeof src[k] === 'boolean') patch[k] = src[k] as boolean
   }
   if (DRIVERS.includes(src.driver as DriverKind)) patch.driver = src.driver as DriverKind
-  if (MODES.includes(src.preConnectionMode as (typeof MODES)[number])) {
-    patch.preConnectionMode = src.preConnectionMode as (typeof MODES)[number]
+  if (MODES.includes(src.preConnectionMode as PreConnectionMode)) {
+    patch.preConnectionMode = src.preConnectionMode as PreConnectionMode
   }
   // A bare sshDevcontainer object is also accepted, so older ssh-only JSON still imports.
   if (isSshConfig(src.sshDevcontainer)) patch.sshDevcontainer = src.sshDevcontainer
   else if (isSshConfig(src)) patch.sshDevcontainer = src as unknown as SshDevcontainerConfig
+  if (isKubectlConfig(src.kubectl)) patch.kubectl = src.kubectl
+  else if (isKubectlConfig(src)) patch.kubectl = src as unknown as KubectlConfig
 
   return Object.keys(patch).length ? patch : null
 }
@@ -108,7 +143,8 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     preScriptReadyRegex: connection?.preScriptReadyRegex ?? '',
     preScriptWaitMs: connection?.preScriptWaitMs ?? 1500,
     preConnectionMode: connection?.preConnectionMode ?? 'none',
-    sshDevcontainer: connection?.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER
+    sshDevcontainer: connection?.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER,
+    kubectl: connection?.kubectl ?? EMPTY_KUBECTL
   }
   const [form, setForm] = useState<ConnectionInput>(initialForm)
   const [test, setTest] = useState<TestResult | null>(null)
@@ -147,6 +183,9 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
 
   const setSsh = <K extends keyof SshDevcontainerConfig>(k: K, v: SshDevcontainerConfig[K]) =>
     applyForm({ ...form, sshDevcontainer: { ...(form.sshDevcontainer ?? EMPTY_SSH_DEVCONTAINER), [k]: v } })
+
+  const setKubectl = <K extends keyof KubectlConfig>(k: K, v: KubectlConfig[K]) =>
+    applyForm({ ...form, kubectl: { ...(form.kubectl ?? EMPTY_KUBECTL), [k]: v } })
 
   /** Dynamically interprets whatever JSON is currently typed/pasted: valid and
    *  shaped like a connection -> applied to the form immediately; otherwise the
@@ -196,18 +235,25 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
     [form.sshDevcontainer]
   )
 
+  const generatedKubectlScript = useMemo(
+    () => (form.kubectl ? buildKubectlScript(form.kubectl, 'auto') : ''),
+    [form.kubectl]
+  )
+
   /** Resolves the payload to send to the backend. The actual preScript/host/port
-   *  for ssh-devcontainer connections are (re)computed on every connect attempt
-   *  in the main process, once a free local port is picked — see
+   *  for the generated modes are (re)computed on every connect attempt in the main
+   *  process, once a free local port is picked — see
    *  `main/ssh/resolvePreConnection.ts`. Here we just make sure a sensible
    *  placeholder regex is set and host/port aren't left stale from a previous mode. */
   const resolvePayload = (): ConnectionInput => {
-    if (form.preConnectionMode === 'ssh-devcontainer') {
+    const mode = form.preConnectionMode
+    if (mode && GENERATED_MODES.includes(mode)) {
+      const fallbackRegex = mode === 'kubectl' ? defaultKubectlReadyRegex() : defaultReadyRegex()
       return {
         ...form,
         host: '127.0.0.1',
         port: 0,
-        preScriptReadyRegex: form.preScriptReadyRegex || defaultReadyRegex()
+        preScriptReadyRegex: form.preScriptReadyRegex || fallbackRegex
       }
     }
     return form
@@ -291,7 +337,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
             </select>
           </label>
 
-          {form.preConnectionMode !== 'ssh-devcontainer' && (
+          {!GENERATED_MODES.includes(form.preConnectionMode ?? 'none') && (
             <>
               <label>
                 Host
@@ -343,13 +389,18 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
 
           <div className="form-section">
             <h4 className="form-section-title">Pre-connection</h4>
-            <label className="span2 inline">
-              <input
-                type="checkbox"
-                checked={form.preConnectionMode === 'ssh-devcontainer'}
-                onChange={(e) => set('preConnectionMode', e.target.checked ? 'ssh-devcontainer' : 'none')}
-              />
-              Use SSH + Devcontainer pre-connection
+            <label className="span2">
+              Mode
+              <select
+                value={form.preConnectionMode ?? 'none'}
+                onChange={(e) => set('preConnectionMode', e.target.value as PreConnectionMode)}
+              >
+                {MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {MODE_LABELS[m]}
+                  </option>
+                ))}
+              </select>
             </label>
 
             {form.preConnectionMode === 'ssh-devcontainer' && (
@@ -415,6 +466,75 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
               <details className="span2">
                 <summary>Generated script</summary>
                 <pre className="mono generated-script">{generatedScript}</pre>
+              </details>
+            </>
+            )}
+
+            {form.preConnectionMode === 'kubectl' && (
+            <>
+              <label>
+                Kubeconfig
+                <input
+                  className="mono"
+                  placeholder="/Users/simone/.kube/pho-dev.yaml"
+                  value={form.kubectl?.kubeconfig ?? ''}
+                  onChange={(e) => setKubectl('kubeconfig', e.target.value)}
+                />
+                <small>Leave blank for kubectl's own default.</small>
+              </label>
+              <label>
+                Context
+                <input
+                  className="mono"
+                  placeholder="pho-dev"
+                  value={form.kubectl?.context ?? ''}
+                  onChange={(e) => setKubectl('context', e.target.value)}
+                />
+                <small>Leave blank for the kubeconfig's current-context.</small>
+              </label>
+              <label>
+                Namespace
+                <input
+                  className="mono"
+                  placeholder="mind"
+                  value={form.kubectl?.namespace ?? ''}
+                  onChange={(e) => setKubectl('namespace', e.target.value)}
+                />
+              </label>
+              <label>
+                Target
+                <input
+                  className="mono"
+                  placeholder="svc/erbavita-pg-cluster-rw"
+                  value={form.kubectl?.target ?? ''}
+                  onChange={(e) => setKubectl('target', e.target.value)}
+                />
+              </label>
+
+              <label>
+                Remote port
+                <input
+                  type="number"
+                  value={form.kubectl?.remotePort ?? 0}
+                  onChange={(e) => setKubectl('remotePort', Number(e.target.value))}
+                />
+                <small>The local port and Host/Port above are chosen automatically — a free port is picked on this machine each time you connect.</small>
+              </label>
+
+              <label>
+                Ready when output matches (regex)
+                <input
+                  className="mono"
+                  placeholder="Forwarding from"
+                  value={form.preScriptReadyRegex}
+                  onChange={(e) => set('preScriptReadyRegex', e.target.value)}
+                />
+                <small>Defaults to "Forwarding from" if left blank.</small>
+              </label>
+
+              <details className="span2">
+                <summary>Generated script</summary>
+                <pre className="mono generated-script">{generatedKubectlScript}</pre>
               </details>
             </>
             )}

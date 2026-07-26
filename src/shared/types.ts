@@ -36,12 +36,15 @@ export interface ConnectionConfig {
   preScriptReadyRegex?: string
   /** Fallback wait (ms) after starting the script when no ready regex is given. */
   preScriptWaitMs?: number
-  /** Whether `preScript`/`preScriptReadyRegex` are generated from `sshDevcontainer`.
-   *  'none' (default) means no pre-connection step runs. */
-  preConnectionMode?: 'none' | 'ssh-devcontainer'
+  /** Which structured config `preScript`/`preScriptReadyRegex` are generated from.
+   *  'none' (default) runs `preScript` verbatim, or nothing if it is empty. */
+  preConnectionMode?: 'none' | 'ssh-devcontainer' | 'kubectl'
   /** Structured config for the SSH + devcontainer pre-connection wizard. Only meaningful
    *  when `preConnectionMode === 'ssh-devcontainer'`. */
   sshDevcontainer?: SshDevcontainerConfig
+  /** Structured config for a plain local `kubectl port-forward`. Only meaningful when
+   *  `preConnectionMode === 'kubectl'`. */
+  kubectl?: KubectlConfig
   createdAt: number
   updatedAt: number
 }
@@ -54,6 +57,22 @@ export interface SshDevcontainerConfig {
   /** Command run inside the devcontainer, e.g. `kubectl port-forward svc/db 5432:5432 ...`. */
   portForwardCommand: string
   /** Port the command listens on inside the devcontainer. */
+  remotePort: number
+}
+
+/** A `kubectl port-forward` run directly on this machine — no SSH hop. The local
+ *  port is not part of this config: a free one is picked on every connect
+ *  (`main/ssh/resolvePreConnection.ts`). */
+export interface KubectlConfig {
+  /** Path to the kubeconfig file, e.g. `/Users/me/.kube/pho-dev.yaml`. Empty means
+   *  kubectl's own default resolution (`$KUBECONFIG` / `~/.kube/config`). */
+  kubeconfig: string
+  /** Context within the kubeconfig. Empty means its `current-context`. */
+  context: string
+  namespace: string
+  /** Port-forward target, e.g. `svc/erbavita-pg-cluster-rw` or `pod/db-0`. */
+  target: string
+  /** Port to forward on the target. */
   remotePort: number
 }
 
