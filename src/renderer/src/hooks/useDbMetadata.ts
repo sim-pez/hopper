@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { TableRef } from '@shared/types'
+import type { SqlVocabulary } from '../sql/complete'
 
 // A compact set of SQL keywords offered by the autocompleter.
 const SQL_KEYWORDS = [
@@ -11,10 +12,14 @@ const SQL_KEYWORDS = [
   'WHEN', 'THEN', 'ELSE', 'END'
 ]
 
+const KEYWORD_ONLY: SqlVocabulary = { keywords: SQL_KEYWORDS, schemas: [], tables: [], columns: {} }
+
 /** Database metadata used for autocompletion and `\d` commands. */
-export function useDbMetadata(connectionId: string, connected: boolean): { words: string[]; tableRefs: TableRef[] } {
-  const [words, setWords] = useState<string[]>(SQL_KEYWORDS)
-  const [tableRefs, setTableRefs] = useState<TableRef[]>([])
+export function useDbMetadata(
+  connectionId: string,
+  connected: boolean
+): { vocab: SqlVocabulary; tableRefs: TableRef[] } {
+  const [vocab, setVocab] = useState<SqlVocabulary>(KEYWORD_ONLY)
 
   useEffect(() => {
     if (!connected) return
@@ -26,23 +31,18 @@ export function useDbMetadata(connectionId: string, connected: boolean): { words
           schemas.map((s) => window.api.db.listTables(connectionId, s).catch(() => []))
         )
         if (cancelled) return
-        const refs = perSchema.flat()
-        setTableRefs(refs)
-        const vocab = new Set<string>(SQL_KEYWORDS)
-        for (const s of schemas) vocab.add(s)
-        for (const t of refs) vocab.add(t.table)
-        setWords([...vocab])
+        const tables = perSchema.flat()
+        setVocab({ keywords: SQL_KEYWORDS, schemas, tables, columns: {} })
 
         // Pull column names in the background (best effort) for richer suggestions.
-        for (const t of refs.slice(0, 200)) {
+        for (const t of tables.slice(0, 200)) {
           const cols = await window.api.db.getColumns(connectionId, t.schema, t.table).catch(() => [])
           if (cancelled) return
           if (cols.length) {
-            setWords((prev) => {
-              const set = new Set(prev)
-              for (const c of cols) set.add(c.name)
-              return [...set]
-            })
+            setVocab((prev) => ({
+              ...prev,
+              columns: { ...prev.columns, [`${t.schema}.${t.table}`]: cols.map((c) => c.name) }
+            }))
           }
         }
       } catch {
@@ -54,5 +54,5 @@ export function useDbMetadata(connectionId: string, connected: boolean): { words
     }
   }, [connectionId, connected])
 
-  return { words, tableRefs }
+  return { vocab, tableRefs: vocab.tables }
 }

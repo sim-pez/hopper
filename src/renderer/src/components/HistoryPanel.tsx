@@ -133,6 +133,7 @@ export function HistoryPanel({ bucket, title, onClose, onSelect }: Props): JSX.E
     <>
       <Modal
         onClose={onClose}
+        size="xl"
         title={`History · ${title}`}
         footer={
           <>

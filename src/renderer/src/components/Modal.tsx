@@ -8,7 +8,7 @@ interface Props {
   title?: ReactNode
   /** Action row pinned below the scrollable body. */
   footer?: ReactNode
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   /** When false, Escape and backdrop-click do nothing (must be dismissed via an in-content action). */
   dismissible?: boolean
 }

@@ -25,7 +25,7 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const toggleScriptLog = useStore((s) => s.toggleScriptLog)
   const openTab = useStore((s) => s.openTab)
   const connected = status?.state === 'connected'
-  const { words, tableRefs } = useDbMetadata(connectionId, connected)
+  const { vocab, tableRefs } = useDbMetadata(connectionId, connected)
 
   const [sql, setSql] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -176,12 +176,14 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
       )}
 
       <SqlEditor
-        className="mono sql-input console-sql"
+        className="mono sql-input"
         value={sql}
         onChange={setSql}
         onRun={run}
-        words={words}
+        vocab={vocab}
         placeholder="Write SQL command"
+        // Dragged from its top edge, so it grows into the script log above it.
+        resize={{ min: 60, max: 480, initial: 110, edge: 'top' }}
       />
 
       {/* Above the toolbar: at the bottom of the console it sits on the window

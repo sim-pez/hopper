@@ -1039,9 +1039,12 @@ tbody tr:hover .cell {
 .cell.editable {
   cursor: cell;
 }
+/* A selection is a block of cells; only its anchor carries the ring. */
 .cell.sel {
-  box-shadow: inset var(--ring);
   background: var(--sel);
+}
+.cell.sel.anchor {
+  box-shadow: inset var(--ring);
 }
 .cell-text {
   display: inline-block;
@@ -1113,6 +1116,17 @@ tr.row-deleted td {
   display: flex;
   flex-direction: column;
 }
+/* Height comes from the drag handle, so the editor must not flex on its own. */
+.sql-editor-wrap.is-resizable {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.sql-editor-wrap.is-resizable .sql-input {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
+}
 .sql-input {
   width: 100%;
   height: 130px;
@@ -1131,10 +1145,10 @@ tr.row-deleted td {
   border-color: var(--border);
   box-shadow: none;
 }
+/* Anchored to the caret in viewport coordinates, so it is `fixed` to escape the
+   overflow-hidden panels the editor sits inside. */
 .autocomplete {
-  position: absolute;
-  left: var(--space-3);
-  bottom: var(--space-2);
+  position: fixed;
   z-index: 20;
   margin: 0;
   padding: var(--space-1);
@@ -1142,13 +1156,16 @@ tr.row-deleted td {
   background: var(--panel);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-2);
   max-height: 180px;
   overflow-y: auto;
-  min-width: 170px;
+  min-width: 210px;
 }
 .autocomplete li {
-  padding: var(--space-1) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--r-sm);
   cursor: pointer;
   font-family: var(--font-mono);
@@ -1157,6 +1174,37 @@ tr.row-deleted td {
 .autocomplete li.active,
 .autocomplete li:hover {
   background: var(--accent);
+  color: var(--on-accent);
+}
+.ac-kind {
+  flex: 0 0 auto;
+  width: 15px;
+  text-align: center;
+  border-radius: var(--r-sm);
+  font-size: var(--text-2xs);
+  background: var(--bg-alt);
+  color: var(--muted);
+}
+.ac-kind.table {
+  color: var(--accent);
+}
+.ac-kind.column {
+  color: var(--ok);
+}
+.ac-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-detail {
+  margin-left: auto;
+  padding-left: var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  opacity: 0.85;
+}
+.autocomplete li.active .ac-detail,
+.autocomplete li.active .ac-kind {
   color: var(--on-accent);
 }
 
@@ -1245,10 +1293,8 @@ tr.row-deleted td {
 .log-line.system {
   color: var(--muted);
 }
-.console-sql {
-  height: 96px;
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--border);
+/* The console's editor is padded tighter than a query tab's. */
+.console .sql-input {
   padding: var(--space-3);
 }
 
@@ -1283,6 +1329,9 @@ tr.row-deleted td {
 }
 .modal.is-lg {
   width: 720px;
+}
+.modal.is-xl {
+  width: 1040px;
 }
 .modal-header {
   display: flex;
@@ -1511,7 +1560,7 @@ details summary {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 52vh;
+  max-height: 74vh;
   overflow-y: auto;
   padding: 2px;
 }
@@ -1544,7 +1593,7 @@ details summary {
 .history-item .generated-script {
   margin: 0;
   background: var(--bg);
-  max-height: 90px;
+  max-height: 160px;
   padding: var(--space-2);
 }
 .history-section {

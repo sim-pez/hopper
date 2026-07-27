@@ -89,7 +89,16 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
   `-webkit-app-region: drag` on the bar (add `no-drag` to anything clickable put there). macOS
   shows the traffic lights over it (`trafficLightPosition` + the `.titlebar.mac` left padding).
 - **Grid rows are arrays** (`unknown[][]`) aligned to `columns`; primary-key values are read
-  by column index. Editing needs a PK — `TableData.editable` gates it.
+  by column index. Editing needs a PK — `TableData.editable` gates it. Selection is a
+  rectangular block (anchor + far corner) extended by drag, shift-click or shift-arrows;
+  ⌘C copies it as TSV **with a header row of the selected column names** and must never open
+  the cell editor (the editor only opens on Enter/F2/double-click/a bare printable key).
+- **SQL autocomplete lives in `renderer/src/sql/`** — `complete.ts` is pure (context from the
+  clause keyword before the caret, `alias.`/`schema.` qualifiers, columns scoped to the
+  statement's FROM/JOIN, prefix > part > subsequence ranking), `caret.ts` measures the caret
+  pixel offset so the popup is anchored to it. `SqlEditor` only opens the popup for a single
+  typed character or ⌃Space — never on paste, click, caret move or a programmatic value
+  change, all of which close it. The vocabulary comes from `useDbMetadata`.
 - **New IPC call:** add to the `Api` interface in `shared/types.ts`, implement the handler in
   `ipc.ts`, and wire it in `preload/index.ts`. Keep all three in sync.
 - **Style with the tokens, never raw values.** `styles.css` §1 defines every color, spacing

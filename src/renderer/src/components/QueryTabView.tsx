@@ -19,7 +19,7 @@ interface Props {
 export function QueryTabView({ tab }: Props): JSX.Element {
   const status = useStore((s) => s.statuses[tab.connectionId])
   const connected = status?.state === 'connected'
-  const { words } = useDbMetadata(tab.connectionId, connected)
+  const { vocab } = useDbMetadata(tab.connectionId, connected)
 
   const [sql, setSql] = useState('SELECT * FROM ')
   const [result, setResult] = useState<QueryResult | null>(null)
@@ -73,8 +73,9 @@ export function QueryTabView({ tab }: Props): JSX.Element {
           value={sql}
           onChange={setSql}
           onRun={run}
-          words={words}
+          vocab={vocab}
           placeholder="Write SQL"
+          resize={{ min: 70, max: 600, initial: 130 }}
         />
         <div className="toolbar">
           <button className="mini primary" onClick={run} disabled={running} title="Run (⌘↵)">
