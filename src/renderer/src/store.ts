@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  ColumnFilter,
   ConnectionState,
   ConnectionStatus,
   ConnectionView,
@@ -7,6 +8,7 @@ import type {
   ScriptOutput,
   Workspace
 } from '@shared/types'
+import { showToast } from './toast'
 
 export interface TableTab {
   kind: 'table'
@@ -15,6 +17,10 @@ export interface TableTab {
   schema: string
   table: string
   title: string
+  /** Filters the view should adopt. Set when the tab is opened by following a
+   *  foreign key; re-set (as a new array) on every such navigation so the view
+   *  can react to it even when the tab was already open. */
+  initialFilters?: ColumnFilter[]
 }
 
 export interface QueryTab {
@@ -32,6 +38,8 @@ export interface ResultTab {
   title: string
   sql: string
   result: QueryResult
+  /** Set when the result is a query plan, so it renders as text, not a grid. */
+  plan?: string
 }
 
 export type Tab = TableTab | QueryTab | ResultTab
@@ -68,6 +76,23 @@ interface AppState {
   setActiveTab: (tabId: string) => void
   showConsole: (connectionId: string | null) => void
   toggleScriptLog: () => void
+}
+
+/** The main process drops and re-establishes a connection on its own when its
+ *  pre-connection script dies, so recovery has to announce itself — otherwise
+ *  the only clue is the sidebar dot briefly changing colour. */
+function announceStateChange(
+  connections: ConnectionView[],
+  prev: ConnectionState,
+  status: ConnectionStatus
+): void {
+  const name = connections.find((c) => c.id === status.id)?.name ?? 'Connection'
+  if (status.state === 'reconnecting') showToast(`${name}: connection lost — reconnecting…`)
+  else if (prev === 'reconnecting' && status.state === 'connected') {
+    showToast(`${name} reconnected`, 'success')
+  } else if (prev === 'reconnecting' && status.state === 'error') {
+    showToast(`${name}: ${status.error ?? 'could not reconnect'}`, 'error')
+  }
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -116,7 +141,11 @@ export const useStore = create<AppState>((set, get) => ({
     })
   },
 
-  setStatus: (status) => set((s) => ({ statuses: { ...s.statuses, [status.id]: status } })),
+  setStatus: (status) => {
+    const prev = get().statuses[status.id]?.state
+    if (prev && prev !== status.state) announceStateChange(get().connections, prev, status)
+    set((s) => ({ statuses: { ...s.statuses, [status.id]: status } }))
+  },
 
   appendLog: (out) =>
     set((s) => {
@@ -140,7 +169,17 @@ export const useStore = create<AppState>((set, get) => ({
             ? t.schema === tab.schema && t.table === tab.table
             : t.id === tab.id)
       )
-      if (existing) return { activeTabId: existing.id }
+      if (existing) {
+        // A table already open, reopened with filters (by following a foreign
+        // key): re-point the existing tab instead of piling up near-duplicates.
+        if (tab.kind === 'table' && tab.initialFilters) {
+          const tabs = s.tabs.map((t) =>
+            t.id === existing.id ? { ...t, initialFilters: tab.initialFilters, title: tab.title } : t
+          )
+          return { tabs, activeTabId: existing.id }
+        }
+        return { activeTabId: existing.id }
+      }
       return { tabs: [...s.tabs, tab], activeTabId: tab.id }
     }),
 

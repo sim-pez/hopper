@@ -1,14 +1,19 @@
 import mysql from 'mysql2/promise'
 import type {
   ApplyChangesPayload,
+  ColumnInfo,
   ColumnMeta,
   ConnectionConfig,
   DeleteRowPayload,
+  ExportOptions,
+  ForeignKey,
+  IndexInfo,
   InsertRowPayload,
   QueryResult,
   TableData,
   TableDataOptions,
   TableRef,
+  TableStructure,
   UpdateCellPayload
 } from '@shared/types'
 import type { Driver } from './types'
@@ -17,6 +22,12 @@ import { previewLiteral } from './sqlPreview'
 // In MySQL a "schema" is a database. We treat the schema argument as the DB name.
 function quoteIdent(id: string): string {
   return `\`${id.replace(/`/g, '``')}\``
+}
+
+/** information_schema column names come back lower- or upper-cased depending on
+ *  the server's `lower_case_table_names` and version — accept either. */
+function field<T>(row: mysql.RowDataPacket, name: string): T {
+  return (row[name] ?? row[name.toUpperCase()]) as T
 }
 
 /** A parameterized statement plus a display-only rendering with values inlined. */
@@ -109,20 +120,65 @@ export class MysqlDriver implements Driver {
     return `${quoteIdent(schema)}.${quoteIdent(table)}`
   }
 
+  /**
+   * Render `opts.filters` as a WHERE fragment (empty string when there is
+   * nothing to filter on), pushing every value onto `params` as a bound
+   * parameter. Text-matching ops cast the column to CHAR so they work on any
+   * type; comparison ops leave the parameter untyped so MySQL coerces it to the
+   * column's own type and orders numbers and dates correctly.
+   */
+  private buildWhere(opts: Pick<TableDataOptions, 'filters' | 'filterJoin'>, params: unknown[]): string {
+    const active = (opts.filters ?? []).filter(
+      (f) => f.op === 'isNull' || f.op === 'notNull' || f.value !== ''
+    )
+    if (!active.length) return ''
+    const p = (v: unknown): string => {
+      params.push(v)
+      return '?'
+    }
+    const clauses = active.map((f) => {
+      const col = quoteIdent(f.column)
+      const asText = `CAST(${col} AS CHAR)`
+      switch (f.op) {
+        case 'isNull':
+          return `${col} IS NULL`
+        case 'notNull':
+          return `${col} IS NOT NULL`
+        case 'contains':
+          return `${asText} LIKE ${p(`%${f.value}%`)}`
+        // NULL never matches a NOT LIKE, but "does not contain x" should include
+        // empty cells — otherwise the filter silently hides rows.
+        case 'notContains':
+          return `(${col} IS NULL OR ${asText} NOT LIKE ${p(`%${f.value}%`)})`
+        case 'startsWith':
+          return `${asText} LIKE ${p(`${f.value}%`)}`
+        case 'ne':
+          return `(${col} IS NULL OR ${col} <> ${p(f.value)})`
+        case 'in': {
+          const items = f.value.split(',').map((s) => s.trim()).filter((s) => s !== '')
+          if (!items.length) return 'FALSE'
+          return `${col} IN (${items.map(p).join(', ')})`
+        }
+        default: {
+          const sign = { eq: '=', gt: '>', gte: '>=', lt: '<', lte: '<=' }[f.op]
+          return `${col} ${sign} ${p(f.value)}`
+        }
+      }
+    })
+    return ` WHERE ${clauses.join(opts.filterJoin === 'or' ? ' OR ' : ' AND ')}`
+  }
+
+  private orderClause(opts: Pick<TableDataOptions, 'orderBy'>): string {
+    return opts.orderBy
+      ? ` ORDER BY ${quoteIdent(opts.orderBy.column)} ${opts.orderBy.desc ? 'DESC' : 'ASC'}`
+      : ''
+  }
+
   async getTableData(schema: string, table: string, opts: TableDataOptions): Promise<TableData> {
     const pks = await this.getPrimaryKeys(schema, table)
     const params: unknown[] = []
-    let where = ''
-    if (opts.filters?.length) {
-      const clauses = opts.filters.map((f) => {
-        params.push(`%${f.value}%`)
-        return `CAST(${quoteIdent(f.column)} AS CHAR) LIKE ?`
-      })
-      where = ` WHERE ${clauses.join(' OR ')}`
-    }
-    const order = opts.orderBy
-      ? ` ORDER BY ${quoteIdent(opts.orderBy.column)} ${opts.orderBy.desc ? 'DESC' : 'ASC'}`
-      : ''
+    const where = this.buildWhere(opts, params)
+    const order = this.orderClause(opts)
     const countParams = [...params]
     params.push(opts.limit, opts.offset)
     const sql = `SELECT * FROM ${this.qualified(schema, table)}${where}${order} LIMIT ? OFFSET ?`
@@ -146,6 +202,122 @@ export class MysqlDriver implements Driver {
       offset: opts.offset,
       durationMs: Date.now() - started
     }
+  }
+
+  async exportTableData(schema: string, table: string, opts: ExportOptions): Promise<QueryResult> {
+    const params: unknown[] = []
+    const where = this.buildWhere(opts, params)
+    const order = this.orderClause(opts)
+    params.push(opts.maxRows)
+    const sql = `SELECT * FROM ${this.qualified(schema, table)}${where}${order} LIMIT ?`
+    const started = Date.now()
+    const [rows, fields] = await this.pool.query<mysql.RowDataPacket[]>({
+      sql,
+      values: params,
+      rowsAsArray: true
+    })
+    return {
+      columns: (fields ?? []).map((f) => ({ name: f.name })),
+      rows: rows as unknown[][],
+      rowCount: rows.length,
+      durationMs: Date.now() - started
+    }
+  }
+
+  async getStructure(schema: string, table: string): Promise<TableStructure> {
+    const [colRows, idxRows, foreignKeys, referencedBy, ddl] = await Promise.all([
+      this.pool
+        .query<mysql.RowDataPacket[]>(
+          `SELECT column_name, column_type, is_nullable, column_default, column_key
+           FROM information_schema.columns
+           WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`,
+          [schema, table]
+        )
+        .then(([r]) => r),
+      this.pool
+        .query<mysql.RowDataPacket[]>(
+          `SELECT index_name, non_unique, seq_in_index, column_name
+           FROM information_schema.statistics
+           WHERE table_schema = ? AND table_name = ?
+           ORDER BY index_name, seq_in_index`,
+          [schema, table]
+        )
+        .then(([r]) => r),
+      this.foreignKeys('k.table_schema = ? AND k.table_name = ?', [schema, table]),
+      this.foreignKeys('k.referenced_table_schema = ? AND k.referenced_table_name = ?', [schema, table]),
+      this.showCreateTable(schema, table)
+    ])
+
+    const columns: ColumnInfo[] = colRows.map((r) => ({
+      name: field<string>(r, 'column_name'),
+      dataType: field<string>(r, 'column_type'),
+      nullable: field<string>(r, 'is_nullable') === 'YES',
+      defaultValue: field<string | null>(r, 'column_default') ?? null,
+      isPrimaryKey: field<string>(r, 'column_key') === 'PRI'
+    }))
+
+    // statistics has one row per index column; fold them back into one entry.
+    const byName = new Map<string, IndexInfo>()
+    for (const r of idxRows) {
+      const name = field<string>(r, 'index_name')
+      let idx = byName.get(name)
+      if (!idx) {
+        idx = { name, columns: [], unique: Number(field(r, 'non_unique')) === 0, primary: name === 'PRIMARY' }
+        byName.set(name, idx)
+      }
+      idx.columns.push(field<string>(r, 'column_name'))
+    }
+    const indexes = [...byName.values()].sort((a, b) => Number(b.primary) - Number(a.primary))
+
+    return { schema, table, columns, indexes, foreignKeys, referencedBy, ddl }
+  }
+
+  private async showCreateTable(schema: string, table: string): Promise<string> {
+    try {
+      const [rows] = await this.pool.query<mysql.RowDataPacket[]>(
+        `SHOW CREATE TABLE ${this.qualified(schema, table)}`
+      )
+      // The column is "Create Table" for tables and "Create View" for views.
+      const row = rows[0] ?? {}
+      return (row['Create Table'] ?? row['Create View'] ?? '') as string
+    } catch {
+      return '' // e.g. no SHOW privilege — the rest of the pane still works.
+    }
+  }
+
+  /** Foreign keys matching `predicate` (aliased `k`), folded from the one-row-per-column
+   *  shape of key_column_usage. */
+  private async foreignKeys(predicate: string, params: unknown[]): Promise<ForeignKey[]> {
+    const [rows] = await this.pool.query<mysql.RowDataPacket[]>(
+      `SELECT k.constraint_name, k.table_schema, k.table_name, k.column_name,
+              k.referenced_table_schema, k.referenced_table_name, k.referenced_column_name
+       FROM information_schema.key_column_usage k
+       WHERE k.referenced_table_name IS NOT NULL AND ${predicate}
+       ORDER BY k.constraint_name, k.ordinal_position`,
+      params
+    )
+    const byName = new Map<string, ForeignKey>()
+    for (const r of rows) {
+      // A constraint name is only unique within its table, so key on both.
+      const owner = `${field<string>(r, 'table_schema')}.${field<string>(r, 'table_name')}`
+      const key = `${owner}.${field<string>(r, 'constraint_name')}`
+      let fk = byName.get(key)
+      if (!fk) {
+        fk = {
+          constraint: field<string>(r, 'constraint_name'),
+          schema: field<string>(r, 'table_schema'),
+          table: field<string>(r, 'table_name'),
+          columns: [],
+          refSchema: field<string>(r, 'referenced_table_schema'),
+          refTable: field<string>(r, 'referenced_table_name'),
+          refColumns: []
+        }
+        byName.set(key, fk)
+      }
+      fk.columns.push(field<string>(r, 'column_name'))
+      fk.refColumns.push(field<string>(r, 'referenced_column_name'))
+    }
+    return [...byName.values()]
   }
 
   private assertWritable(): void {

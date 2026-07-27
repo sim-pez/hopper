@@ -44,7 +44,9 @@ src/
                     active selection), secrets (keychain).
     process/        preScriptRunner — spawns/tracks/kills pre-connection scripts.
     db/             Driver interface (types.ts) + postgres.ts + mysql.ts + pool.ts
-                    (connection registry, orchestrates pre-script -> connect).
+                    (connection registry, orchestrates pre-script -> connect, and
+                    auto-reconnects a connection that drops) + ddl.ts (synthesized
+                    CREATE TABLE for engines that can't dump their own).
   preload/index.ts  contextBridge exposing window.api (contextIsolation on).
   renderer/src/     React UI: store.ts (zustand), components/, styles.css.
 ```
@@ -69,6 +71,30 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
   `resolvePreConnection`, a `MODES`/`MODE_LABELS` entry + field block + type guard (for the
   JSON import whitelist) in `ConnectionForm.tsx`, and `hasPreScript` in `Sidebar.tsx`.
   Everything interpolated into a generated script must be shell-quoted — see `sq()`.
+- **A dropped connection heals itself.** When a live connection dies on its own — its
+  pre-script exited, or the 20s health-check ping failed — `pool.ts` tears it down and
+  retries 3 times with backoff (`RECONNECT_DELAYS_MS`), state `'reconnecting'`, each attempt
+  re-running `resolvePreConnection` so a generated mode gets a *fresh* free local port. A
+  deliberate `connect`/`disconnect` cancels whatever retry is in flight. `powerMonitor`'s
+  `resume` pings everything immediately (sleep almost always kills a port-forward). Because
+  this happens without the user asking, `store.ts` toasts the drop, the recovery and the
+  final give-up — don't make recovery silent.
+- **Filters are per column, `op` + value** (`ColumnFilter`), AND- or OR-combined via
+  `filterJoin`. Text ops (`contains`/`startsWith`/…) cast the column to text so they work on
+  any type; comparison ops (`eq`/`gt`/`in`/…) bind the value untyped so the DB coerces it to
+  the column type and numbers/dates order correctly. Adding an op means a case in *both*
+  drivers' `buildWhere` plus an entry in `FILTER_OPS` (utils).
+- **The right rail holds one panel at a time** — `StructurePanel` (columns, indexes, foreign
+  keys, copyable DDL) or `RowDetailPanel` (the selected row, one field per line, JSON pretty-
+  printed). Toggled by icon-only toolbar buttons and ⌘⇧E; `.grid-with-rail` is the flex row
+  that holds the grid beside it. `StructurePanel` is presentational: `TableTabView` fetches
+  the structure because it needs the foreign keys for the grid regardless.
+- **⌘↵ runs one statement, ⌘⇧↵ runs the editor.** `sql/statements.ts` is pure (quote-,
+  comment- and dollar-quote-aware splitting); `SqlEditor` reports the caret via
+  `onSelectionChange` and parents keep it in a **ref**, since `onRun` reads it synchronously.
+  A selection always wins over the caret. Explain wraps via `shared/explain.ts`, which only
+  uses `ANALYZE` (it executes!) for a plain `SELECT`; a single-column plan renders as `<pre>`,
+  MySQL's tabular EXPLAIN stays in the grid.
 - **Workspaces scope connections.** Every `ConnectionConfig` has a `workspaceId`; exactly one
   workspace is active (`workspaces.json`) and `connections:list` defaults to it, so the sidebar
   only ever shows the active workspace. No workspace is ever created implicitly — with none,
@@ -92,7 +118,11 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
   by column index. Editing needs a PK — `TableData.editable` gates it. Selection is a
   rectangular block (anchor + far corner) extended by drag, shift-click or shift-arrows;
   ⌘C copies it as TSV **with a header row of the selected column names** and must never open
-  the cell editor (the editor only opens on Enter/F2/double-click/a bare printable key).
+  the cell editor (the editor only opens on Enter/F2/double-click/a bare printable key). A
+  cell whose column has a single-column FK grows a follow button on hover, which opens the
+  referenced table filtered to that row (composite FKs are skipped — one cell can't express
+  a multi-column match). Following a key re-points the table's existing tab via
+  `TableTab.initialFilters` rather than opening a second one.
 - **SQL autocomplete lives in `renderer/src/sql/`** — `complete.ts` is pure (context from the
   clause keyword before the caret, `alias.`/`schema.` qualifiers, columns scoped to the
   statement's FROM/JOIN, prefix > part > subsequence ranking), `caret.ts` measures the caret

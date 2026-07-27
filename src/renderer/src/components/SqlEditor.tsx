@@ -11,10 +11,22 @@ interface ResizeOptions {
   edge?: 'top' | 'bottom'
 }
 
+/** Caret position, or the selected range when `start !== end`. */
+export interface EditorSelection {
+  start: number
+  end: number
+}
+
 interface Props {
   value: string
   onChange: (v: string) => void
+  /** ⌘↵ — the parent decides what that runs, using the reported selection. */
   onRun: () => void
+  /** ⌘⇧↵ — run the whole editor rather than one statement. */
+  onRunAll?: () => void
+  /** Fires whenever the caret or selection moves, so the parent can tell which
+   *  statement ⌘↵ (or its Run button) should apply to. */
+  onSelectionChange?: (sel: EditorSelection) => void
   /** Schemas, tables, columns and keywords the completer draws on. */
   vocab?: SqlVocabulary
   placeholder?: string
@@ -44,6 +56,8 @@ export function SqlEditor({
   value,
   onChange,
   onRun,
+  onRunAll,
+  onSelectionChange,
   vocab = EMPTY_VOCABULARY,
   placeholder,
   className,
@@ -114,9 +128,14 @@ export function SqlEditor({
     setActive(0)
   }
 
+  const reportSelection = (ta: HTMLTextAreaElement): void => {
+    onSelectionChange?.({ start: ta.selectionStart, end: ta.selectionEnd })
+  }
+
   const onInput = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const text = e.target.value
     onChange(text)
+    reportSelection(e.target)
     const type = (e.nativeEvent as InputEvent).inputType
     const data = (e.nativeEvent as InputEvent).data
     // A single typed character opens (or narrows) the popup. A paste, a drop,
@@ -145,7 +164,11 @@ export function SqlEditor({
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       close()
-      onRun()
+      // Report before running: the parent reads the selection from a ref, so it
+      // has to be up to date by the time onRun fires.
+      reportSelection(e.currentTarget)
+      if (e.shiftKey && onRunAll) onRunAll()
+      else onRun()
       return
     }
     // Explicit trigger, the escape hatch when the popup stays closed.
@@ -197,6 +220,7 @@ export function SqlEditor({
         placeholder={placeholder}
         onChange={onInput}
         onKeyDown={onKeyDown}
+        onSelect={(e) => reportSelection(e.currentTarget)}
         onMouseDown={close}
         onScroll={close}
         onBlur={close}

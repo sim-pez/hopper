@@ -5,6 +5,7 @@ import type {
   ConnectionExport,
   ConnectionInput,
   DeleteRowPayload,
+  ExportOptions,
   InsertRowPayload,
   QueryHistoryInput,
   ScriptOutput,
@@ -180,10 +181,16 @@ export function registerIpc(): void {
   ipcMain.handle('db:getColumns', (_e, id: string, schema: string, table: string) =>
     getDriver(id).getColumns(schema, table)
   )
+  ipcMain.handle('db:getStructure', (_e, id: string, schema: string, table: string) =>
+    getDriver(id).getStructure(schema, table)
+  )
 
   // --- Data ---
   ipcMain.handle('db:getTableData', (_e, id: string, schema: string, table: string, opts: TableDataOptions) =>
     getDriver(id).getTableData(schema, table, opts)
+  )
+  ipcMain.handle('db:exportTableData', (_e, id: string, schema: string, table: string, opts: ExportOptions) =>
+    getDriver(id).exportTableData(schema, table, opts)
   )
   ipcMain.handle('db:updateCell', (_e, id: string, payload: UpdateCellPayload) =>
     getDriver(id).updateCell(payload)

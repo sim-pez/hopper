@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
-import type { ColumnMeta } from '@shared/types'
+import type { ColumnFilter, ColumnMeta, FilterOp, QueryResult } from '@shared/types'
+import { VALUELESS_OPS } from '@shared/types'
 
 /** Render a DB value for display in a grid cell. */
 export function displayValue(v: unknown): string {
@@ -92,6 +93,46 @@ export function sqlLiteral(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
   const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
   return `'${s.replace(/'/g, "''")}'`
+}
+
+/** The filter operators offered in the filter bar, in menu order. `symbol` is
+ *  what the chip shows; it doubles as the `<option>` label. */
+export const FILTER_OPS: { op: FilterOp; symbol: string; title: string }[] = [
+  { op: 'contains', symbol: '~', title: 'contains' },
+  { op: 'notContains', symbol: '!~', title: 'does not contain' },
+  { op: 'startsWith', symbol: '^', title: 'starts with' },
+  { op: 'eq', symbol: '=', title: 'equals' },
+  { op: 'ne', symbol: '≠', title: 'not equal to' },
+  { op: 'gt', symbol: '>', title: 'greater than' },
+  { op: 'gte', symbol: '≥', title: 'greater than or equal to' },
+  { op: 'lt', symbol: '<', title: 'less than' },
+  { op: 'lte', symbol: '≤', title: 'less than or equal to' },
+  { op: 'in', symbol: 'in', title: 'in a comma-separated list' },
+  { op: 'isNull', symbol: 'is null', title: 'is NULL' },
+  { op: 'notNull', symbol: 'not null', title: 'is not NULL' }
+]
+
+export function opSymbol(op: FilterOp): string {
+  return FILTER_OPS.find((o) => o.op === op)?.symbol ?? op
+}
+
+/** Whether an operator uses the value box at all. */
+export function opTakesValue(op: FilterOp): boolean {
+  return !VALUELESS_OPS.includes(op)
+}
+
+/** Short human rendering of the active filters, for a tab title. */
+export function describeFilters(filters: ColumnFilter[]): string {
+  return filters
+    .map((f) => `${f.column} ${opSymbol(f.op)}${opTakesValue(f.op) ? ` ${f.value}` : ''}`)
+    .join(', ')
+}
+
+/** A single-column result (a Postgres `QUERY PLAN`) as one text block, or null
+ *  when the result is really tabular and belongs in the grid. */
+export function planText(result: QueryResult): string | null {
+  if (result.columns.length !== 1) return null
+  return result.rows.map((r) => displayValue(r[0])).join('\n')
 }
 
 /** History bucket for a connection. History is per-database — every statement

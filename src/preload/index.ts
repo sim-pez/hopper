@@ -5,6 +5,7 @@ import type {
   ConnectionInput,
   ConnectionStatus,
   DeleteRowPayload,
+  ExportOptions,
   InsertRowPayload,
   QueryHistoryInput,
   ScriptOutput,
@@ -38,8 +39,12 @@ const api: Api = {
     listTables: (id: string, schema: string) => ipcRenderer.invoke('db:listTables', id, schema),
     getColumns: (id: string, schema: string, table: string) =>
       ipcRenderer.invoke('db:getColumns', id, schema, table),
+    getStructure: (id: string, schema: string, table: string) =>
+      ipcRenderer.invoke('db:getStructure', id, schema, table),
     getTableData: (id: string, schema: string, table: string, opts: TableDataOptions) =>
       ipcRenderer.invoke('db:getTableData', id, schema, table, opts),
+    exportTableData: (id: string, schema: string, table: string, opts: ExportOptions) =>
+      ipcRenderer.invoke('db:exportTableData', id, schema, table, opts),
     updateCell: (id: string, payload: UpdateCellPayload) => ipcRenderer.invoke('db:updateCell', id, payload),
     insertRow: (id: string, payload: InsertRowPayload) => ipcRenderer.invoke('db:insertRow', id, payload),
     deleteRow: (id: string, payload: DeleteRowPayload) => ipcRenderer.invoke('db:deleteRow', id, payload),

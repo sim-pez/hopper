@@ -1,8 +1,8 @@
-import { app, BrowserWindow, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, powerMonitor, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { initStores, registerIpc } from './ipc'
-import { shutdownAll } from './db/pool'
+import { checkAllConnections, shutdownAll } from './db/pool'
 
 // resources/ sits next to out/ when unpackaged; packaged builds get it in resourcesPath.
 function resource(name: string): string {
@@ -60,6 +60,10 @@ app.whenReady().then(async () => {
   await initStores()
   registerIpc()
   createWindow()
+
+  // Sleeping almost always kills a port-forward. Ping straight away rather than
+  // waiting up to a health-check interval to notice and start recovering.
+  powerMonitor.on('resume', checkAllConnections)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

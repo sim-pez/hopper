@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { ResultTab } from '../store'
 import { DataGrid } from './DataGrid'
+import { RowDetailPanel } from './RowDetailPanel'
 import { downloadCsv, downloadXlsx } from '../utils'
-import { Download } from '../icons'
+import { Download, PanelRight } from '../icons'
 
 interface Props {
   tab: ResultTab
@@ -10,8 +11,10 @@ interface Props {
 
 /** Read-only view of a query result set opened from the console. */
 export function ResultTabView({ tab }: Props): JSX.Element {
-  const { result, sql } = tab
+  const { result, sql, plan } = tab
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx')
+  const [showDetail, setShowDetail] = useState(false)
+  const [detailRow, setDetailRow] = useState<number | null>(null)
 
   const doExport = () => {
     if (exportFormat === 'csv') downloadCsv('query.csv', result.columns, result.rows)
@@ -22,7 +25,7 @@ export function ResultTabView({ tab }: Props): JSX.Element {
     <div className="tab-view">
       <div className="toolbar">
         <span className="muted">
-          {result.command ?? 'rows'}: {result.rowCount}
+          {plan ? 'query plan' : `${result.command ?? 'rows'}: ${result.rowCount}`}
           {result.durationMs != null && ` · ${result.durationMs} ms`}
         </span>
         <span className="sep" />
@@ -30,7 +33,7 @@ export function ResultTabView({ tab }: Props): JSX.Element {
           {sql}
         </code>
         <div className="spacer" />
-        {result.rows.length > 0 && (
+        {!plan && result.rows.length > 0 && (
           <>
             <select
               className="mini-select"
@@ -45,10 +48,40 @@ export function ResultTabView({ tab }: Props): JSX.Element {
               <Download />
               Export
             </button>
+            <button
+              className={showDetail ? 'icon-btn is-on' : 'icon-btn'}
+              aria-pressed={showDetail}
+              aria-label="Row detail"
+              title="Row detail (⌘⇧E)"
+              onClick={() => setShowDetail((v) => !v)}
+            >
+              <PanelRight size={14} />
+            </button>
           </>
         )}
       </div>
-      <DataGrid columns={result.columns} rows={result.rows} />
+
+      {plan ? (
+        <pre className="plan mono">{plan}</pre>
+      ) : (
+        <div className="grid-with-rail">
+          <div className="grid-relative">
+            <DataGrid
+              columns={result.columns}
+              rows={result.rows}
+              onAnchorChange={setDetailRow}
+              onToggleDetail={() => setShowDetail((v) => !v)}
+            />
+          </div>
+          {showDetail && (
+            <RowDetailPanel
+              columns={result.columns}
+              row={detailRow != null ? (result.rows[detailRow] ?? null) : null}
+              onClose={() => setShowDetail(false)}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ColumnMeta } from '@shared/types'
 import { displayValue, isNull } from '../utils'
 import { showToast } from '../toast'
-import { ChevronDown, ChevronUp, RotateCcw, Search, X } from '../icons'
+import { ArrowUpRight, ChevronDown, ChevronUp, RotateCcw, Search, X } from '../icons'
+
+/** Where a column's foreign key points. */
+export interface FkTarget {
+  schema: string
+  table: string
+  column: string
+}
 
 interface Props {
   columns: ColumnMeta[]
@@ -20,6 +27,14 @@ interface Props {
   isDirty?: (rowIndex: number, colIndex: number) => boolean
   /** Whether a row is marked for deletion. */
   isDeleted?: (rowIndex: number) => boolean
+  /** Column name -> the row it references. Those cells get a "follow" button. */
+  foreignKeys?: Record<string, FkTarget>
+  /** Follow the foreign key on `column` for `value`. */
+  onFollowFk?: (target: FkTarget, value: unknown) => void
+  /** The row the selection anchor sits on, so the parent can show its detail. */
+  onAnchorChange?: (rowIndex: number | null) => void
+  /** ⌘⇧E from a cell — the parent opens or closes the row detail panel. */
+  onToggleDetail?: () => void
 }
 
 interface Editing {
@@ -67,7 +82,11 @@ export function DataGrid({
   sortState,
   onSearchColumn,
   isDirty,
-  isDeleted
+  isDeleted,
+  foreignKeys,
+  onFollowFk,
+  onAnchorChange,
+  onToggleDetail
 }: Props): JSX.Element {
   const [sel, setSel] = useState<Selection | null>(null)
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -87,6 +106,11 @@ export function DataGrid({
     document.addEventListener('mouseup', stop)
     return () => document.removeEventListener('mouseup', stop)
   }, [])
+
+  // Report the anchor row so a detail panel can follow the selection.
+  useEffect(() => {
+    onAnchorChange?.(sel ? sel.r : null)
+  }, [sel?.r, onAnchorChange])
 
   /** Selected cells as TSV, with the selected columns' names as a header row. */
   const copySelection = useCallback(() => {
@@ -135,6 +159,11 @@ export function DataGrid({
     if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault()
       copySelection()
+      return
+    }
+    if (onToggleDetail && (e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'e' || e.key === 'E')) {
+      e.preventDefault()
+      onToggleDetail()
       return
     }
     if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
@@ -242,13 +271,15 @@ export function DataGrid({
                     r + 1
                   )}
                 </td>
-                {columns.map((_, c) => {
+                {columns.map((col, c) => {
                   const isSel = inSelection(sel, r, c)
                   const isAnchor = sel?.r === r && sel?.c === c
                   const isEditing = editing?.r === r && editing?.c === c
                   const dirty = isDirty?.(r, c) ?? false
                   const value = row[c]
                   const text = displayValue(value)
+                  // A NULL references nothing, so it gets no follow button.
+                  const fk = !isNull(value) ? foreignKeys?.[col.name] : undefined
                   return (
                     <td
                       key={c}
@@ -283,9 +314,26 @@ export function DataGrid({
                       ) : isNull(value) ? (
                         <span className="null">NULL</span>
                       ) : (
-                        <span className="cell-text" title={text}>
-                          {text}
-                        </span>
+                        <>
+                          <span className="cell-text" title={text}>
+                            {text}
+                          </span>
+                          {fk && onFollowFk && (
+                            <button
+                              className="cell-fk"
+                              title={`Open ${fk.table} where ${fk.column} = ${text}`}
+                              aria-label={`Open referenced row in ${fk.table}`}
+                              // Not a drag start: keep the click from moving the selection.
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onFollowFk(fk, value)
+                              }}
+                            >
+                              <ArrowUpRight size={11} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </td>
                   )

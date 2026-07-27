@@ -101,13 +101,21 @@ export interface ConnectionExport
   password?: string
 }
 
-export type ConnectionState = 'disconnected' | 'starting-script' | 'connecting' | 'connected' | 'error'
+export type ConnectionState =
+  | 'disconnected'
+  | 'starting-script'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'error'
 
 export interface ConnectionStatus {
   id: string
   state: ConnectionState
   error?: string
   scriptRunning: boolean
+  /** 1-based attempt number while `state === 'reconnecting'`. */
+  reconnectAttempt?: number
 }
 
 export interface ColumnMeta {
@@ -142,10 +150,34 @@ export interface TableRef {
   type: string
 }
 
-/** A single `LIKE` filter on one column. Multiple filters are combined with OR. */
+/** Comparison used by a `ColumnFilter`.
+ *  - `contains`/`notContains`/`startsWith` match case-insensitively against the
+ *    column cast to text, so they work on any type.
+ *  - `eq`/`ne`/`gt`/`gte`/`lt`/`lte`/`in` compare in the column's own type, so
+ *    numbers and dates order correctly (the DB coerces the bound text value).
+ *  - `isNull`/`notNull` take no value. */
+export type FilterOp =
+  | 'contains'
+  | 'notContains'
+  | 'startsWith'
+  | 'eq'
+  | 'ne'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'in'
+  | 'isNull'
+  | 'notNull'
+
+/** Ops that ignore `ColumnFilter.value` entirely. */
+export const VALUELESS_OPS: readonly FilterOp[] = ['isNull', 'notNull']
+
+/** A single condition on one column. */
 export interface ColumnFilter {
   column: string
-  /** Substring to match; wrapped as `%value%` and matched case-insensitively. */
+  op: FilterOp
+  /** Unused for `isNull`/`notNull`; comma-separated for `in`. */
   value: string
 }
 
@@ -153,8 +185,52 @@ export interface TableDataOptions {
   limit: number
   offset: number
   orderBy?: { column: string; desc: boolean }
-  /** Per-column LIKE filters, OR-combined. */
   filters?: ColumnFilter[]
+  /** How multiple filters combine. Defaults to `'and'`. */
+  filterJoin?: 'and' | 'or'
+}
+
+/** Fetch every row matching the filters instead of one page, for export.
+ *  `maxRows` is a hard stop so a huge table can't exhaust memory. */
+export type ExportOptions = Omit<TableDataOptions, 'limit' | 'offset'> & { maxRows: number }
+
+/** One foreign key, described from its owning (referencing) side. Composite keys
+ *  keep `columns`/`refColumns` aligned by position. */
+export interface ForeignKey {
+  constraint: string
+  schema: string
+  table: string
+  columns: string[]
+  refSchema: string
+  refTable: string
+  refColumns: string[]
+}
+
+export interface ColumnInfo extends ColumnMeta {
+  nullable: boolean
+  defaultValue: string | null
+  isPrimaryKey: boolean
+}
+
+export interface IndexInfo {
+  name: string
+  columns: string[]
+  unique: boolean
+  primary: boolean
+}
+
+/** Everything the structure pane shows for one table. */
+export interface TableStructure {
+  schema: string
+  table: string
+  columns: ColumnInfo[]
+  indexes: IndexInfo[]
+  /** FKs on this table, pointing elsewhere. */
+  foreignKeys: ForeignKey[]
+  /** FKs on other tables, pointing at this one. */
+  referencedBy: ForeignKey[]
+  /** `CREATE TABLE` text — `SHOW CREATE TABLE` on MySQL, synthesized on Postgres. */
+  ddl: string
 }
 
 /** One pending row change staged in the grid before the user saves. */
@@ -259,7 +335,11 @@ export interface Api {
     listSchemas: (id: string) => Promise<string[]>
     listTables: (id: string, schema: string) => Promise<TableRef[]>
     getColumns: (id: string, schema: string, table: string) => Promise<ColumnMeta[]>
+    /** Columns, indexes and foreign keys for the structure pane. */
+    getStructure: (id: string, schema: string, table: string) => Promise<TableStructure>
     getTableData: (id: string, schema: string, table: string, opts: TableDataOptions) => Promise<TableData>
+    /** Every row matching the filters (up to `opts.maxRows`), for a full export. */
+    exportTableData: (id: string, schema: string, table: string, opts: ExportOptions) => Promise<QueryResult>
     updateCell: (id: string, payload: UpdateCellPayload) => Promise<number>
     insertRow: (id: string, payload: InsertRowPayload) => Promise<Record<string, unknown>>
     deleteRow: (id: string, payload: DeleteRowPayload) => Promise<number>

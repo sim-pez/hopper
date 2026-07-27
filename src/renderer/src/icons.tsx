@@ -253,3 +253,50 @@ export const ArrowRight = icon(
     <path d="m14 5.5 5.5 6.5L14 18.5" />
   </>
 )
+
+/** Follow a foreign key to the row it references. */
+export const ArrowUpRight = icon(
+  'ArrowUpRight',
+  <>
+    <path d="M7.5 16.5 16.5 7.5" />
+    <path d="M9 7.5h7.5V15" />
+  </>
+)
+
+/** Table structure: columns, indexes, keys. */
+export const Columns = icon(
+  'Columns',
+  <>
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M9.5 4v16" />
+    <path d="M15 4v16" />
+  </>
+)
+
+/** Row detail: the side panel showing one record vertically. */
+export const PanelRight = icon(
+  'PanelRight',
+  <>
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M14.5 4v16" />
+  </>
+)
+
+/** Query plan. */
+export const Gauge = icon(
+  'Gauge',
+  <>
+    <path d="M4 17a8 8 0 1 1 16 0" />
+    <path d="m12 13.5 4-3.5" />
+  </>
+)
+
+/** Marks a primary-key column in the structure pane. */
+export const Key = icon(
+  'Key',
+  <>
+    <circle cx="8" cy="12" r="3.5" />
+    <path d="M11.5 12H20" />
+    <path d="M17 12v3" />
+  </>
+)

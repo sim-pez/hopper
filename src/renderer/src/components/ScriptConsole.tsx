@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ColumnMeta, QueryResult } from '@shared/types'
+import { buildExplain, isExplain } from '@shared/explain'
 import { useStore } from '../store'
-import { SqlEditor } from './SqlEditor'
+import { SqlEditor, type EditorSelection } from './SqlEditor'
 import { HistoryPanel } from './HistoryPanel'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Banner } from './Banner'
 import { useDbMetadata } from '../hooks/useDbMetadata'
 import { useResizable } from '../hooks/useResizable'
-import { errorText, historyKey, noWhereGuard, uid } from '../utils'
-import { ChevronDown, ChevronUp, Clock, Play, Stop, Terminal } from '../icons'
+import { sqlToRun } from '../sql/statements'
+import { errorText, historyKey, noWhereGuard, planText, uid } from '../utils'
+import { ChevronDown, ChevronUp, Clock, Gauge, Play, Stop, Terminal } from '../icons'
 
 interface Props {
   connectionId: string
@@ -37,14 +39,18 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
   const [height, resizeHandle] = useResizable({ axis: 'y', min: 140, max: 640, initial: 260, invert: true })
 
+  // Where the caret is, so ⌘↵ and the Run button target one statement rather
+  // than the whole editor. A ref, because it is read during the run itself.
+  const selection = useRef<EditorSelection>({ start: 0, end: 0 })
+
   const cancel = async () => {
     await window.api.db.cancelQuery(connectionId)
   }
 
   // Result sets open in their own tab; the console only reports non-result outcomes.
-  const openResultTab = (querySql: string, result: QueryResult) => {
-    const title = querySql.replace(/\s+/g, ' ').trim().slice(0, 28)
-    openTab({ kind: 'result', id: uid(), connectionId, title: title || 'result', sql: querySql, result })
+  const openResultTab = (querySql: string, result: QueryResult, plan?: string) => {
+    const title = plan ? 'query plan' : querySql.replace(/\s+/g, ' ').trim().slice(0, 28)
+    openTab({ kind: 'result', id: uid(), connectionId, title: title || 'result', sql: querySql, result, plan })
   }
 
   // The script log is collapsible on its own, so the SQL editor can stay open
@@ -80,7 +86,7 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     throw new Error(`Unsupported command: ${verb}`)
   }
 
-  const doRun = async (trimmed: string) => {
+  const doRun = async (trimmed: string, asPlan = false) => {
     // Clear the previous run's outcome up front: a stale "N row(s) affected"
     // left next to a failed run reads as if nothing happened.
     setMessage(null)
@@ -107,7 +113,12 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     try {
       const res = await window.api.db.query(connectionId, trimmed)
       setLastMs(res.durationMs ?? null)
-      if (res.columns.length > 0) {
+      // A Postgres plan is one text column; MySQL's EXPLAIN is a real table, so
+      // it keeps the grid.
+      const plan = asPlan ? planText(res) : null
+      if (plan) {
+        openResultTab(trimmed, res, plan)
+      } else if (res.columns.length > 0) {
         // A result set — show it in a dedicated tab, keep the console compact.
         openResultTab(trimmed, res)
       } else {
@@ -120,14 +131,31 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
     }
   }
 
-  const run = async () => {
-    const trimmed = sql.trim()
+  /** The statement ⌘↵ applies to: the selection, else the one at the caret.
+   *  `\d` meta-commands are never split — they are lines, not SQL. */
+  const targetSql = (): string => {
+    const whole = sql.trim()
+    if (whole.startsWith('\\')) return whole
+    return sqlToRun(sql, selection.current.start, selection.current.end)
+  }
+
+  const start = async (trimmed: string) => {
     if (!trimmed) return
     if (!trimmed.startsWith('\\') && noWhereGuard(trimmed)) {
       setPendingRun(trimmed)
       return
     }
     await doRun(trimmed)
+  }
+
+  const run = () => start(targetSql())
+  const runAll = () => start(sql.trim())
+
+  const explain = () => {
+    const statement = targetSql()
+    if (!statement || statement.startsWith('\\')) return
+    // Already an EXPLAIN — run it as written instead of wrapping it again.
+    doRun(isExplain(statement) ? statement : buildExplain(conn?.driver ?? 'postgres', statement), true)
   }
 
   return (
@@ -180,6 +208,10 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
         value={sql}
         onChange={setSql}
         onRun={run}
+        onRunAll={runAll}
+        onSelectionChange={(sel) => {
+          selection.current = sel
+        }}
         vocab={vocab}
         placeholder="Write SQL command"
         // Dragged from its top edge, so it grows into the script log above it.
@@ -191,9 +223,23 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
       {error && <Banner message={error} onDismiss={() => setError(null)} />}
 
       <div className="toolbar">
-        <button className="mini primary" onClick={run} disabled={running || !connected} title="Run (⌘↵)">
+        <button
+          className="mini primary"
+          onClick={run}
+          disabled={running || !connected}
+          title="Run the statement at the caret (⌘↵) — ⌘⇧↵ runs the whole editor"
+        >
           <Play />
           {running ? 'Running…' : 'Run'}
+        </button>
+        <button
+          className="mini"
+          onClick={explain}
+          disabled={running || !connected}
+          title="Show the query plan. ANALYZE (which executes the statement) is only used for a plain SELECT."
+        >
+          <Gauge />
+          Explain
         </button>
         {running && (
           <button className="mini danger" onClick={cancel}>

@@ -145,7 +145,9 @@ export function Sidebar({ onNew, onEdit }: Props): JSX.Element {
                   <span className="conn-sub">
                     {busy === c.id
                       ? 'Connecting…'
-                      : `${c.driver} · ${c.user}@${c.host}:${c.port}/${c.database}`}
+                      : state === 'reconnecting'
+                        ? `Reconnecting… (${statuses[c.id]?.reconnectAttempt ?? 1})`
+                        : `${c.driver} · ${c.user}@${c.host}:${c.port}/${c.database}`}
                   </span>
                 </button>
                 <div className="conn-actions">
