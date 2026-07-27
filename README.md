@@ -1,51 +1,93 @@
-# DB Manager
+<h1 align="center">🗄️ DB Manager</h1>
 
-A desktop database client (Electron + React + TypeScript) built for databases that are
-only reachable after running a **pre-connection script** — e.g. a `kubectl port-forward`
-into a cluster.
+<p align="center">
+  <em>A desktop database client for databases that are a little hard to reach.</em>
+</p>
 
-## Features
+<p align="center">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-2b2e3a?logo=electron&logoColor=9feaf9">
+  <img alt="React" src="https://img.shields.io/badge/React-2b2e3a?logo=react&logoColor=61dafb">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-2b2e3a?logo=typescript&logoColor=3178c6">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-2b2e3a?logo=postgresql&logoColor=4169e1">
+  <img alt="MySQL" src="https://img.shields.io/badge/MySQL-2b2e3a?logo=mysql&logoColor=00758f">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2b2e3a">
+</p>
 
-- **Saved connections** for PostgreSQL and MySQL/MariaDB. Passwords are encrypted at rest
-  with the OS keychain (Electron `safeStorage`); connection metadata lives in JSON under
-  the app's `userData` dir.
-- **Per-connection pre-connection bash script.** On *Connect* the script is spawned (in its
-  own process group), its output streamed to a live console, and the app waits until a
-  configurable "ready" regex matches (or a timeout elapses) before opening the DB. On
-  *Disconnect* / quit the whole process group is terminated so port-forwards don't leak.
-- **Schema browser** — expand schemas → tables/views in the sidebar.
-- **Excel-like editable grid.** Double-click (or press Enter/F2) a cell to edit; the change
-  is written back as a primary-key-targeted, parameterized `UPDATE`. Insert and delete rows
-  too. Editing needs a primary key — otherwise the grid is read-only.
-- **SQL query tab** with a results grid (⌘/Ctrl+Enter to run).
-- **Extras:** pagination + adjustable `LIMIT`, column sort, CSV export, connection test with
-  latency, per-connection color tags, duplicate, and a **read-only** safety toggle for prod.
+---
 
-## Tech
+Most database GUIs assume your database is just… *there*. Mine never is. It sits behind a
+`kubectl port-forward`, or an SSH hop into a devcontainer, or some bash incantation I keep
+forgetting.
 
-- Electron main (Node) with `pg` and `mysql2` behind a common `Driver` interface
-  (`src/main/db`). Add new engines by implementing that interface.
-- Typed IPC via a `contextBridge` preload (`window.api`), `contextIsolation` on.
-- React + Zustand renderer, custom lightweight data grid (no heavy grid dependency).
+So this one runs **your pre-connection script for you**, waits until it's actually ready,
+and only then opens the connection. Disconnect, and the tunnel is cleaned up too. No more
+orphaned port-forwards quietly squatting on port 5432. 🧹
 
-## Develop
+## ✨ What it does
+
+🔌 **Connects through anything.** Give a connection a bash script and a "ready" regex — the
+script runs in its own process group, output streams to a live console, and the app waits
+for the match (or a timeout) before dialing the DB. Two friendlier presets, `kubectl` and
+`ssh-devcontainer`, generate that script from a few fields and pick a **fresh free local
+port on every connect**, so nothing ever clashes and two connections can be live at once.
+
+💚 **Heals itself.** Tunnel died? Laptop slept? A 20s health-check notices, and the
+connection retries with backoff — re-running the pre-script and grabbing a new port each
+attempt. You get a toast, not a mystery.
+
+🌳 **Browses your schema.** Schemas → tables & views in the sidebar, with a right rail that
+shows columns, indexes, foreign keys and copy-pasteable DDL.
+
+📊 **Edits like a spreadsheet.** Click a cell, type, done — written back as a
+primary-key-targeted, parameterized `UPDATE`. Insert and delete rows, drag out a rectangular
+selection, ⌘C it as TSV (header row included). Cells with a foreign key grow a little follow
+button that jumps you to the referenced row. No primary key? The grid stays read-only, on
+purpose.
+
+⌨️ **Speaks SQL.** Query tabs with autocomplete (tables, columns, aliases — scoped to your
+`FROM`), ⌘↵ to run the statement under the caret, ⌘⇧↵ for the whole editor, and a one-click
+`EXPLAIN`.
+
+🗂️ **Keeps things tidy.** Workspaces group connections, per-connection query history is
+pinnable and nameable, and there's a **read-only** toggle for the connections you'd rather
+not break. Plus pagination, sorting, per-column filters, CSV export, color tags and a
+latency-reporting connection test.
+
+🔐 **Keeps secrets secret.** Passwords are encrypted at rest with the OS keychain
+(Electron `safeStorage`) and never cross into the renderer.
+
+## 🧰 Tech
+
+- **Electron main** (Node) with `pg` and `mysql2` behind one small `Driver` interface
+  (`src/main/db`) — adding an engine means implementing that interface.
+- **Typed IPC** over a `contextBridge` preload (`window.api`), `contextIsolation` on.
+- **React + Zustand** renderer with a hand-rolled data grid — no heavyweight grid dependency.
+
+## 🚀 Develop
 
 ```bash
 npm install
-npm run dev        # launches the Electron window with HMR
+npm run dev        # Electron window with HMR
 npm run typecheck  # tsc for main+preload and renderer
 npm run build      # production build into out/
 ```
 
-## Build a macOS app
+Need something to point it at? There are two throwaway seeded databases in `docker/`:
 
 ```bash
-npm run build:mac  # -> dist/DB Manager-<version>-arm64.dmg + dist/mac-arm64/DB Manager.app
+npm run testdb:up     # postgres on :55432, mysql on :33060 (demo/demo)
+npm run testdb:down
+```
+
+## 📦 Build a macOS app
+
+```bash
+npm run build:mac  # -> dist/DB Manager-<version>-arm64.dmg
 ```
 
 Ad-hoc signed (no Apple Developer ID), so the build only runs on the machine that made it.
 
-## Layout
+## 🗺️ Layout
 
 ```
 src/
@@ -55,8 +97,13 @@ src/
   renderer/   React UI (components, zustand store, styles)
 ```
 
-## Security notes
+## 🛡️ Security notes
 
-- Passwords are never sent to the renderer (only `hasPassword`) and never logged.
-- Pre-connection scripts run in your shell with your environment; treat connection files as
-  trusted input.
+- Passwords never reach the renderer (only `hasPassword`) and are never logged.
+- All SQL uses bound parameters; identifiers are quoted per driver.
+- Pre-connection scripts run in **your** shell with **your** environment — treat saved
+  connection files as trusted input.
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).

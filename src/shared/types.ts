@@ -64,13 +64,13 @@ export interface SshDevcontainerConfig {
  *  port is not part of this config: a free one is picked on every connect
  *  (`main/ssh/resolvePreConnection.ts`). */
 export interface KubectlConfig {
-  /** Path to the kubeconfig file, e.g. `/Users/me/.kube/pho-dev.yaml`. Empty means
+  /** Path to the kubeconfig file, e.g. `~/.kube/config`. Empty means
    *  kubectl's own default resolution (`$KUBECONFIG` / `~/.kube/config`). */
   kubeconfig: string
   /** Context within the kubeconfig. Empty means its `current-context`. */
   context: string
   namespace: string
-  /** Port-forward target, e.g. `svc/erbavita-pg-cluster-rw` or `pod/db-0`. */
+  /** Port-forward target, e.g. `svc/my-postgres-rw` or `pod/db-0`. */
   target: string
   /** Port to forward on the target. */
   remotePort: number

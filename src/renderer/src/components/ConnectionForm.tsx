@@ -424,7 +424,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 Devcontainer workspace folder
                 <input
                   className="mono"
-                  placeholder="/home/simone/repo/if-sysadmin"
+                  placeholder="/home/me/repo/my-project"
                   value={form.sshDevcontainer?.workspaceFolder ?? ''}
                   onChange={(e) => setSsh('workspaceFolder', e.target.value)}
                 />
@@ -436,7 +436,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                   className="mono"
                   rows={3}
                   spellCheck={false}
-                  placeholder="kubectl port-forward svc/fantaglia-pg-cluster-rw 5432:5432 --kubeconfig /workspace/.devcontainer/gitignored/.kube/conf.yaml --context cfi-stg"
+                  placeholder="kubectl port-forward svc/my-postgres-rw 5432:5432 --kubeconfig /workspace/.devcontainer/.kube/config.yaml --context staging"
                   value={form.sshDevcontainer?.portForwardCommand ?? ''}
                   onChange={(e) => setSsh('portForwardCommand', e.target.value)}
                 />
@@ -476,7 +476,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 Kubeconfig
                 <input
                   className="mono"
-                  placeholder="/Users/simone/.kube/pho-dev.yaml"
+                  placeholder="~/.kube/config"
                   value={form.kubectl?.kubeconfig ?? ''}
                   onChange={(e) => setKubectl('kubeconfig', e.target.value)}
                 />
@@ -486,7 +486,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 Context
                 <input
                   className="mono"
-                  placeholder="pho-dev"
+                  placeholder="staging"
                   value={form.kubectl?.context ?? ''}
                   onChange={(e) => setKubectl('context', e.target.value)}
                 />
@@ -496,7 +496,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 Namespace
                 <input
                   className="mono"
-                  placeholder="mind"
+                  placeholder="default"
                   value={form.kubectl?.namespace ?? ''}
                   onChange={(e) => setKubectl('namespace', e.target.value)}
                 />
@@ -505,7 +505,7 @@ export function ConnectionForm({ connection, onClose, onSaved }: Props): JSX.Ele
                 Target
                 <input
                   className="mono"
-                  placeholder="svc/erbavita-pg-cluster-rw"
+                  placeholder="svc/my-postgres-rw"
                   value={form.kubectl?.target ?? ''}
                   onChange={(e) => setKubectl('target', e.target.value)}
                 />
