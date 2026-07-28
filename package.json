@@ -10,6 +10,8 @@
     "build": "electron-vite build",
     "build:mac": "npm run typecheck && electron-vite build && electron-builder --mac",
     "pack:mac": "npm run build && electron-builder --mac --dir",
+    "build:linux": "npm run typecheck && electron-vite build && electron-builder --linux",
+    "pack:linux": "npm run build && electron-builder --linux --dir",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",

@@ -24,6 +24,7 @@ import {
 } from '../utils'
 import { showToast } from '../toast'
 import { ArrowLeft, ArrowRight, Columns, Download, Filter, PanelRight, Plus, RefreshCw, X } from '../icons'
+import { KEY_ROW_DETAIL } from '../shortcuts'
 
 interface Props {
   tab: TableTab
@@ -424,7 +425,7 @@ export function TableTabView({ tab }: Props): JSX.Element {
             className={rail === 'row' ? 'icon-btn is-on' : 'icon-btn'}
             aria-pressed={rail === 'row'}
             aria-label="Row detail"
-            title="Row detail (⌘⇧E)"
+            title={`Row detail (${KEY_ROW_DETAIL})`}
             onClick={() => toggleRail('row')}
           >
             <PanelRight size={14} />

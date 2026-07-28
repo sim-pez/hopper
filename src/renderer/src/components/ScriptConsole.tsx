@@ -11,6 +11,7 @@ import { useResizable } from '../hooks/useResizable'
 import { sqlToRun } from '../sql/statements'
 import { errorText, historyKey, noWhereGuard, planText, uid } from '../utils'
 import { ChevronDown, ChevronUp, Clock, Gauge, Play, Stop, Terminal } from '../icons'
+import { KEY_RUN, KEY_RUN_ALL } from '../shortcuts'
 
 interface Props {
   connectionId: string
@@ -227,7 +228,7 @@ export function ScriptConsole({ connectionId }: Props): JSX.Element {
           className="mini primary"
           onClick={run}
           disabled={running || !connected}
-          title="Run the statement at the caret (⌘↵) — ⌘⇧↵ runs the whole editor"
+          title={`Run the statement at the caret (${KEY_RUN}) — ${KEY_RUN_ALL} runs the whole editor`}
         >
           <Play />
           {running ? 'Running…' : 'Run'}

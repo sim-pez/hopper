@@ -14,6 +14,37 @@ interface RunningScript {
  * Emits 'output' with ScriptOutput payloads. Scripts are spawned in their own
  * process group (detached) so the whole group can be terminated on disconnect.
  */
+/**
+ * Vars an AppImage's runtime rewrites to point at its own bundled libraries. A child
+ * process (kubectl, ssh, psql…) inheriting them loads those libs instead of the system
+ * ones and dies on a glibc/OpenSSL mismatch. The runtime stashes the pre-launch value in
+ * `<VAR>_ORIG`, so restore that where it exists and drop the var otherwise.
+ */
+const APPIMAGE_VARS = [
+  'LD_LIBRARY_PATH',
+  'LD_PRELOAD',
+  'PYTHONPATH',
+  'PERLLIB',
+  'GSETTINGS_SCHEMA_DIR',
+  'QT_PLUGIN_PATH',
+  'GTK_PATH',
+  'GDK_PIXBUF_MODULE_FILE',
+  'GDK_PIXBUF_MODULEDIR',
+  'XDG_DATA_DIRS'
+]
+
+/** The environment a pre-connection script should see: the user's, not Electron's. */
+function scriptEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  if (!env.APPIMAGE) return env
+  for (const name of APPIMAGE_VARS) {
+    const orig = env[`${name}_ORIG`]
+    if (orig != null && orig !== '') env[name] = orig
+    else delete env[name]
+  }
+  return env
+}
+
 class PreScriptRunner extends EventEmitter {
   private running = new Map<string, RunningScript>()
 
@@ -42,7 +73,7 @@ class PreScriptRunner extends EventEmitter {
     const child = spawn('bash', ['-lc', cfg.preScript], {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env
+      env: scriptEnv()
     })
     const record: RunningScript = { child, exited: false }
     this.running.set(cfg.id, record)

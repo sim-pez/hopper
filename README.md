@@ -15,6 +15,10 @@
 
 ---
 
+<p align="center">
+  <img alt="Hopper browsing a table, with the SQL console below" src="docs/screenshot.png" width="900">
+</p>
+
 Most database GUIs assume your database is just… *there*. Mine never is. It sits behind a
 `kubectl port-forward`, or an SSH hop into a devcontainer.
 
@@ -57,6 +61,34 @@ latency-reporting connection test.
 🔐 **Keeps secrets secret.** Passwords are encrypted at rest with the OS keychain
 (Electron `safeStorage`) and never cross into the renderer.
 
+## 💻 Platforms
+
+| | Status |
+|---|---|
+| **macOS** (Apple Silicon) | Supported — `dmg` + `zip` |
+| **Linux** (x64 / arm64) | Supported — `AppImage` + `deb` |
+| **Windows** | Not supported |
+
+Windows isn't just a missing build target: pre-connection scripts are spawned as
+`bash -lc` in their own process group and torn down with a negative-PID group kill, and
+the generated `kubectl` / `ssh-devcontainer` scripts are POSIX-shell quoted. All three
+would need a Windows path before a build would be worth shipping.
+
+On Linux, a few things to know:
+
+- **Passwords need a keyring.** `safeStorage` reports itself as available even with no
+  secret store, but then "encrypts" with a hardcoded password. Install `gnome-keyring`
+  or `kwallet` (the `.deb` recommends `libsecret-1-0`); without one the app logs a
+  warning at startup and your saved passwords are effectively plaintext.
+- **`bash` must be on `PATH`**, along with whatever your pre-connection scripts call
+  (`kubectl`, `ssh`, …). Scripts run through a login shell, so they see your `~/.profile`.
+- **AppImage users get a cleaned environment.** The AppImage runtime points
+  `LD_LIBRARY_PATH` and friends at its own bundled libraries; those are restored to their
+  pre-launch values for spawned scripts, so `kubectl` and `ssh` load system libs and don't
+  die on a glibc/OpenSSL mismatch.
+- Window controls are drawn by the desktop over the app's own title bar
+  (`titleBarOverlay`), and ⌘ shortcuts are Ctrl shortcuts.
+
 ## 🧰 Tech
 
 - **Electron main** (Node) with `pg` and `mysql2` behind one small `Driver` interface
@@ -80,13 +112,20 @@ npm run testdb:up     # postgres on :55432, mysql on :33060 (demo/demo)
 npm run testdb:down
 ```
 
-## 📦 Build a macOS app
+## 📦 Build an app
 
 ```bash
-npm run build:mac  # -> dist/Hopper-<version>-arm64.dmg
+npm run build:mac    # -> dist/Hopper-<version>-arm64.dmg (+ .zip)
+npm run build:linux  # -> dist/Hopper-<version>-{x64,arm64}.AppImage (+ .deb)
 ```
 
-Ad-hoc signed (no Apple Developer ID), so the build only runs on the machine that made it.
+The macOS build is ad-hoc signed (no Apple Developer ID), so it only runs on the machine
+that made it. Linux packages are unsigned and need no notarisation dance.
+
+Both builds are pure JS end to end (`pg`, `mysql2` and `xlsx` need no native rebuild), so
+either target cross-builds for the other architecture. Producing a `.deb` or `.AppImage`
+does need Linux packaging tools, though — run `build:linux` on Linux, or in
+electron-builder's Docker image. `npm run pack:linux` makes an unpacked directory anywhere.
 
 ## 🗺️ Layout
 

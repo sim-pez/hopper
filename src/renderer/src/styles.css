@@ -487,6 +487,14 @@ label.inline {
 .titlebar.mac {
   padding-left: 84px;
 }
+/* Windows/Linux draw native window controls over the bar (titleBarOverlay). Chromium
+   reports their geometry via env(); pad both sides equally so the centred title clears
+   them wherever the desktop puts them. The fallback covers ~3 buttons. */
+.titlebar.overlay {
+  --wco-w: calc(100% - env(titlebar-area-width, calc(100% - 140px)));
+  padding-left: var(--wco-w);
+  padding-right: var(--wco-w);
+}
 .titlebar-icon {
   color: var(--muted);
 }

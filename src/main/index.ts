@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { initStores, registerIpc } from './ipc'
 import { checkAllConnections, shutdownAll } from './db/pool'
+import { warnIfWeakEncryption } from './store/secrets'
 
 // resources/ sits next to out/ when unpackaged; packaged builds get it in resourcesPath.
 function resource(name: string): string {
@@ -57,6 +58,7 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   // Unpackaged macOS runs show the generic Electron dock icon unless set explicitly.
   if (process.platform === 'darwin' && !appIcon.isEmpty()) app.dock?.setIcon(appIcon)
+  warnIfWeakEncryption()
   await initStores()
   registerIpc()
   createWindow()

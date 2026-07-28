@@ -4,6 +4,7 @@ import { DataGrid } from './DataGrid'
 import { RowDetailPanel } from './RowDetailPanel'
 import { downloadCsv, downloadXlsx } from '../utils'
 import { Download, PanelRight } from '../icons'
+import { KEY_ROW_DETAIL } from '../shortcuts'
 
 interface Props {
   tab: ResultTab
@@ -52,7 +53,7 @@ export function ResultTabView({ tab }: Props): JSX.Element {
               className={showDetail ? 'icon-btn is-on' : 'icon-btn'}
               aria-pressed={showDetail}
               aria-label="Row detail"
-              title="Row detail (⌘⇧E)"
+              title={`Row detail (${KEY_ROW_DETAIL})`}
               onClick={() => setShowDetail((v) => !v)}
             >
               <PanelRight size={14} />

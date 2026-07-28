@@ -15,6 +15,12 @@ files:
 
 asar: true
 
+# main/index.ts loads the BrowserWindow icon from process.resourcesPath. macOS gets its
+# icon from the bundle regardless, but Linux window managers need this file to exist.
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+
 mac:
   icon: resources/icon.icns
   category: public.app-category.developer-tools
@@ -30,4 +36,39 @@ mac:
   gatekeeperAssess: false
 
 dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+linux:
+  icon: resources/icon.png
+  category: Development
+  synopsis: Database client with per-connection pre-connection scripts
+  description: >-
+    Desktop database client for PostgreSQL and MySQL instances that are only reachable
+    after a pre-connection script, such as a kubectl port-forward or an SSH tunnel.
+  maintainer: sim-pez <sim-pez@users.noreply.github.com>
+  executableName: hopper
+  desktop:
+    entry:
+      # Lets window managers match the window to the .desktop icon.
+      StartupWMClass: Hopper
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+
+deb:
+  # Electron's runtime deps; libsecret backs safeStorage (see README).
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+
+appImage:
   artifactName: ${productName}-${version}-${arch}.${ext}

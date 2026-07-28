@@ -113,7 +113,15 @@ Data flow: renderer → `window.api.*` (preload) → `ipcRenderer.invoke` → `i
 - **The title bar is renderer-drawn** (`TitleBar.tsx`, `titleBarStyle: 'hidden'`). Keep
   `--titlebar-h` in `styles.css` in sync with `TITLE_BAR_HEIGHT` in `main/index.ts`, and keep
   `-webkit-app-region: drag` on the bar (add `no-drag` to anything clickable put there). macOS
-  shows the traffic lights over it (`trafficLightPosition` + the `.titlebar.mac` left padding).
+  shows the traffic lights over it (`trafficLightPosition` + the `.titlebar.mac` left padding);
+  Linux/Windows get the native window-controls overlay, and `.titlebar.overlay` reserves room
+  for it from `env(titlebar-area-width)`.
+- **macOS and Linux only; no Windows.** Handlers already take `metaKey || ctrlKey`, but user-
+  visible shortcut labels must come from `renderer/src/shortcuts.ts`, never a hardcoded `⌘`
+  (comments are fine). `preScriptRunner` is POSIX-bound — `bash -lc`, detached process groups,
+  negative-PID kill — and strips the AppImage runtime's `LD_LIBRARY_PATH` & co. from the script
+  env so spawned tools load system libs. On Linux `safeStorage` lies about availability with no
+  keyring, hence `warnIfWeakEncryption()`.
 - **Grid rows are arrays** (`unknown[][]`) aligned to `columns`; primary-key values are read
   by column index. Editing needs a PK — `TableData.editable` gates it. Selection is a
   rectangular block (anchor + far corner) extended by drag, shift-click or shift-arrows;

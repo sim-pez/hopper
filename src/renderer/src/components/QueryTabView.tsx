@@ -14,6 +14,7 @@ import { useDbMetadata } from '../hooks/useDbMetadata'
 import { sqlToRun } from '../sql/statements'
 import { downloadCsv, downloadXlsx, errorText, historyKey, noWhereGuard, planText } from '../utils'
 import { Download, Gauge, PanelRight, Play, Stop, Zap } from '../icons'
+import { KEY_ROW_DETAIL, KEY_RUN, KEY_RUN_ALL } from '../shortcuts'
 
 interface Props {
   tab: QueryTab
@@ -113,7 +114,7 @@ export function QueryTabView({ tab }: Props): JSX.Element {
             className="mini primary"
             onClick={run}
             disabled={running}
-            title="Run the statement at the caret (⌘↵) — ⌘⇧↵ runs the whole editor"
+            title={`Run the statement at the caret (${KEY_RUN}) — ${KEY_RUN_ALL} runs the whole editor`}
           >
             <Play />
             {running ? 'Running…' : 'Run'}
@@ -162,7 +163,7 @@ export function QueryTabView({ tab }: Props): JSX.Element {
                 className={showDetail ? 'icon-btn is-on' : 'icon-btn'}
                 aria-pressed={showDetail}
                 aria-label="Row detail"
-                title="Row detail (⌘⇧E)"
+                title={`Row detail (${KEY_ROW_DETAIL})`}
                 onClick={() => setShowDetail((v) => !v)}
               >
                 <PanelRight size={14} />
@@ -200,7 +201,7 @@ export function QueryTabView({ tab }: Props): JSX.Element {
           <EmptyState
             icon={<Zap size={28} />}
             title="No results yet"
-            hint="Write a statement above and press ⌘↵ to run it."
+            hint={`Write a statement above and press ${KEY_RUN} to run it.`}
           />
         )
       )}

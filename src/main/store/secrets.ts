@@ -18,6 +18,26 @@ function canEncrypt(): boolean {
   }
 }
 
+/**
+ * Linux only, and only meaningful after `ready`: with no keyring on the box, safeStorage
+ * still reports encryption as "available" but falls back to a hardcoded password, so the
+ * secrets file is effectively plaintext. Say so rather than implying passwords are safe.
+ */
+export function warnIfWeakEncryption(): void {
+  if (process.platform !== 'linux') return
+  try {
+    const backend = safeStorage.getSelectedStorageBackend()
+    if (backend === 'basic_text' || backend === 'unknown') {
+      console.warn(
+        `[secrets] no OS keyring available (backend: ${backend}) — saved passwords are ` +
+          'NOT protected at rest. Install gnome-keyring or kwallet, or leave passwords empty.'
+      )
+    }
+  } catch {
+    /* not available on this platform/version */
+  }
+}
+
 export async function setPassword(id: string, password: string): Promise<void> {
   const useEnc = canEncrypt()
   const encoded = useEnc
