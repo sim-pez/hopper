@@ -1,4 +1,4 @@
-name: db-manager-testdata
+name: hopper-testdata
 
 # Two throwaway databases seeded with random data to exercise the app.
 # Postgres  -> localhost:55432  (user: demo / pass: demo / db: shop)

@@ -23,7 +23,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     backgroundColor: '#1e1e2e',
-    title: 'DB Manager',
+    title: 'Hopper',
     icon: appIcon,
     // The title bar is drawn by the renderer (TitleBar.tsx). macOS keeps its traffic
     // lights; Windows/Linux get the window-controls overlay.

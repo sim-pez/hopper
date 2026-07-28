@@ -1,4 +1,4 @@
-# CLAUDE.md — db-manager
+# CLAUDE.md — Hopper
 
 Desktop database client (Electron + React + TypeScript) for databases reachable only
 after a **pre-connection script** (e.g. `kubectl port-forward` into a cluster).

@@ -10,7 +10,7 @@ export function TitleBar(): JSX.Element {
   return (
     <header className={`titlebar ${window.api.system.platform === 'darwin' ? 'mac' : ''}`}>
       <Database className="titlebar-icon" size={13} />
-      <span className="titlebar-title">{active ? active.name : 'DB Manager'}</span>
+      <span className="titlebar-title">{active ? active.name : 'Hopper'}</span>
     </header>
   )
 }

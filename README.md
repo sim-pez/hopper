@@ -1,4 +1,4 @@
-<h1 align="center">🗄️ DB Manager</h1>
+<h1 align="center">🗄️ Hopper</h1>
 
 <p align="center">
   <em>A desktop database client for databases that are a little hard to reach.</em>
@@ -83,7 +83,7 @@ npm run testdb:down
 ## 📦 Build a macOS app
 
 ```bash
-npm run build:mac  # -> dist/DB Manager-<version>-arm64.dmg
+npm run build:mac  # -> dist/Hopper-<version>-arm64.dmg
 ```
 
 Ad-hoc signed (no Apple Developer ID), so the build only runs on the machine that made it.
