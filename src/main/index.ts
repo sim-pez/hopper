@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, powerMonitor, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { initStores, registerIpc } from './ipc'
@@ -77,9 +77,25 @@ app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+// Set once the renderer has confirmed it's safe to quit (or had nothing to
+// confirm), so the second before-quit firing from app.exit() below doesn't
+// re-ask and deadlock.
+let quitConfirmed = false
+
 app.on('before-quit', async (e) => {
-  // Ensure port-forward processes are reaped before exit.
   e.preventDefault()
+  if (!quitConfirmed) {
+    const win = BrowserWindow.getAllWindows()[0]
+    const canQuit = win
+      ? await new Promise<boolean>((resolve) => {
+          ipcMain.once('app:quit-response', (_e, ok: boolean) => resolve(ok))
+          win.webContents.send('app:confirm-quit')
+        })
+      : true
+    if (!canQuit) return
+    quitConfirmed = true
+  }
+  // Ensure port-forward processes are reaped before exit.
   await shutdownAll()
   app.exit(0)
 })

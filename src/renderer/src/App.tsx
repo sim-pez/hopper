@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from './store'
 import { Sidebar } from './components/Sidebar'
 import { ConnectionForm } from './components/ConnectionForm'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { TabBar } from './components/TabBar'
 import { TableTabView } from './components/TableTabView'
 import { QueryTabView } from './components/QueryTabView'
@@ -18,15 +19,24 @@ export function App(): JSX.Element {
   const { refreshWorkspaces, refreshConnections, setStatus, appendLog, tabs, activeTabId, consoleConnectionId } =
     useStore()
   const [editing, setEditing] = useState<ConnectionView | null | 'new'>(null)
+  const [confirmQuit, setConfirmQuit] = useState(false)
 
   useEffect(() => {
     refreshWorkspaces()
     refreshConnections()
     const offOut = window.api.scripts.onOutput(appendLog)
     const offStatus = window.api.scripts.onStatus(setStatus)
+    // Main asks before it tears anything down, so unsaved row edits get a
+    // chance to be kept instead of silently lost on Cmd-Q / window close.
+    const offQuit = window.api.app.onConfirmQuit(() => {
+      const dirty = Object.keys(useStore.getState().dirtyTabs).length > 0
+      if (dirty) setConfirmQuit(true)
+      else window.api.app.respondQuit(true)
+    })
     return () => {
       offOut()
       offStatus()
+      offQuit()
     }
   }, [])
 
@@ -65,6 +75,21 @@ export function App(): JSX.Element {
         />
       )}
       <ToastHost />
+      {confirmQuit && (
+        <ConfirmDialog
+          title="Unsaved changes"
+          message="Some tabs have unsaved row edits. Quit and discard them?"
+          confirmLabel="Discard and quit"
+          onCancel={() => {
+            setConfirmQuit(false)
+            window.api.app.respondQuit(false)
+          }}
+          onConfirm={() => {
+            setConfirmQuit(false)
+            window.api.app.respondQuit(true)
+          }}
+        />
+      )}
     </div>
   )
 }

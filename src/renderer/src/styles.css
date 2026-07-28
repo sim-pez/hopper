@@ -779,6 +779,13 @@ label.inline {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tab-dirty-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
 .tab-close {
   display: inline-flex;
   align-items: center;
@@ -962,6 +969,23 @@ label.inline {
   border-radius: var(--r-full);
   animation: spin 700ms linear infinite;
 }
+/* Save/discard for pending row edits. Floats over the grid instead of living
+   in the toolbar, so it only takes up space while there's something to act on. */
+.grid-float-actions {
+  position: absolute;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  z-index: 5;
+  animation: fade-in var(--dur) var(--ease-out);
+}
 
 table.grid {
   border-collapse: separate;
@@ -987,6 +1011,12 @@ table.grid thead th {
   white-space: nowrap;
   font-weight: var(--fw-semi);
   border-bottom: 1px solid var(--border-strong);
+  cursor: grab;
+}
+/* Dragged to reorder columns; the target gets an accent rule on the side the
+   dragged column would land. */
+table.grid thead th.col-drop-target {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .th-inner {
   display: inline-flex;
@@ -1032,12 +1062,17 @@ table.grid thead th:hover .th-search,
   color: var(--accent);
 }
 
-.rownum {
+/* `table.grid th, table.grid td` above is two type selectors + one class, so
+   a bare `.rownum`/`.cell` (one class) loses the padding cascade to its
+   `padding: 0` regardless of source order — match its specificity here. */
+table.grid th.rownum,
+table.grid td.rownum {
   position: sticky;
   left: 0;
   background: var(--bg-alt);
   color: var(--muted);
   text-align: center;
+  vertical-align: middle;
   padding: 2px var(--space-2);
   z-index: 1;
   min-width: 36px;
@@ -1048,13 +1083,13 @@ thead .rownum {
   z-index: 3;
 }
 
-.cell {
-  padding: var(--space-1) var(--space-3);
+table.grid td.cell {
+  padding: var(--space-1) var(--space-4);
+  text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   outline: none;
   cursor: default;
+  vertical-align: middle;
 }
 tbody tr:hover .cell {
   background: rgba(255, 255, 255, 0.018);
@@ -1071,9 +1106,19 @@ tbody tr:hover .cell {
 }
 .cell-text {
   display: inline-block;
-  max-width: 320px;
+  /* 100%, not a fixed px: truncates right at the cell's own padded content
+     edge, so long values keep the same left/right gutter as short ones
+     instead of the ellipsis bleeding into (and past) the padding. */
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: middle;
+}
+/* A cell with a follow-FK button reserves room for it (present but
+   transparent until hover/select) so it never pushes the text past the
+   cell's right edge. */
+.cell.has-fk .cell-text {
+  max-width: calc(100% - 16px);
 }
 /* Follow a foreign key. Hidden until the cell is hovered or selected, so a
    table full of keys doesn't turn into a table full of buttons. */
@@ -1107,7 +1152,8 @@ tbody tr:hover .cell {
   border-radius: 0;
   background: var(--bg);
   color: var(--text);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-4);
+  text-align: center;
   font: inherit;
   box-shadow: inset var(--ring);
 }
@@ -1129,6 +1175,9 @@ tr.row-deleted td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   background: none;
   border: none;
   color: var(--muted);
@@ -1138,7 +1187,7 @@ tr.row-deleted td {
 .row-del:hover {
   color: var(--danger);
 }
-.empty-row {
+table.grid td.empty-row {
   text-align: center;
   color: var(--muted);
   padding: var(--space-5);

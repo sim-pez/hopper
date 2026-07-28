@@ -55,12 +55,20 @@ interface AppState {
   scriptLogs: Record<string, ScriptOutput[]>
   tabs: Tab[]
   activeTabId: string | null
-  consoleConnectionId: string | null // which connection's script console is shown
-  /** The console that was last open, so hiding it leaves something to reopen. */
+  /** Which connection's script console is shown. Follows the active tab's
+   *  connection (see `openTab`/`setActiveTab`) so the console always targets
+   *  the database the user is looking at, not whichever connected last. */
+  consoleConnectionId: string | null
+  /** The console that was last open (or would be, per the active tab), so
+   *  hiding it leaves the right thing to reopen. */
   lastConsoleConnectionId: string | null
   /** Whether the script log pane inside the console is shown. Independent of the
    *  console itself, so the SQL editor can stay up with the log collapsed. */
   scriptLogVisible: boolean
+  /** Count of unsaved row edits/deletes per tab id, reported by `TableTabView`.
+   *  Drives the close-tab and quit confirmations; a tab with no pending changes
+   *  has no entry. */
+  dirtyTabs: Record<string, number>
 
   refreshWorkspaces: () => Promise<void>
   /** Switch the active workspace and reload its connections. */
@@ -76,6 +84,7 @@ interface AppState {
   setActiveTab: (tabId: string) => void
   showConsole: (connectionId: string | null) => void
   toggleScriptLog: () => void
+  setTabDirty: (tabId: string, count: number) => void
 }
 
 /** The main process drops and re-establishes a connection on its own when its
@@ -107,6 +116,7 @@ export const useStore = create<AppState>((set, get) => ({
   consoleConnectionId: null,
   lastConsoleConnectionId: null,
   scriptLogVisible: true,
+  dirtyTabs: {},
 
   refreshWorkspaces: async () => {
     const [workspaces, activeWorkspaceId] = await Promise.all([
@@ -161,6 +171,13 @@ export const useStore = create<AppState>((set, get) => ({
 
   openTab: (tab) =>
     set((s) => {
+      const consoleFields = {
+        // The console tracks whichever connection the active tab belongs to,
+        // so a query typed while a table/query tab is open runs against the
+        // right database — not whichever connection was connected last.
+        consoleConnectionId: s.consoleConnectionId !== null ? tab.connectionId : s.consoleConnectionId,
+        lastConsoleConnectionId: tab.connectionId
+      }
       const existing = s.tabs.find(
         (t) =>
           t.kind === tab.kind &&
@@ -176,11 +193,11 @@ export const useStore = create<AppState>((set, get) => ({
           const tabs = s.tabs.map((t) =>
             t.id === existing.id ? { ...t, initialFilters: tab.initialFilters, title: tab.title } : t
           )
-          return { tabs, activeTabId: existing.id }
+          return { tabs, activeTabId: existing.id, ...consoleFields }
         }
-        return { activeTabId: existing.id }
+        return { activeTabId: existing.id, ...consoleFields }
       }
-      return { tabs: [...s.tabs, tab], activeTabId: tab.id }
+      return { tabs: [...s.tabs, tab], activeTabId: tab.id, ...consoleFields }
     }),
 
   closeTab: (tabId) =>
@@ -188,14 +205,35 @@ export const useStore = create<AppState>((set, get) => ({
       const tabs = s.tabs.filter((t) => t.id !== tabId)
       const activeTabId =
         s.activeTabId === tabId ? (tabs.length ? tabs[tabs.length - 1].id : null) : s.activeTabId
-      return { tabs, activeTabId }
+      const dirtyTabs = { ...s.dirtyTabs }
+      delete dirtyTabs[tabId]
+      return { tabs, activeTabId, dirtyTabs }
     }),
 
-  setActiveTab: (tabId) => set({ activeTabId: tabId }),
+  setActiveTab: (tabId) =>
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId)
+      if (!tab) return { activeTabId: tabId }
+      return {
+        activeTabId: tabId,
+        consoleConnectionId: s.consoleConnectionId !== null ? tab.connectionId : s.consoleConnectionId,
+        lastConsoleConnectionId: tab.connectionId
+      }
+    }),
   showConsole: (connectionId) =>
     set((s) => ({
       consoleConnectionId: connectionId,
       lastConsoleConnectionId: connectionId ?? s.lastConsoleConnectionId
     })),
-  toggleScriptLog: () => set((s) => ({ scriptLogVisible: !s.scriptLogVisible }))
+  toggleScriptLog: () => set((s) => ({ scriptLogVisible: !s.scriptLogVisible })),
+  setTabDirty: (tabId, count) =>
+    set((s) => {
+      if (!count) {
+        if (!(tabId in s.dirtyTabs)) return {}
+        const dirtyTabs = { ...s.dirtyTabs }
+        delete dirtyTabs[tabId]
+        return { dirtyTabs }
+      }
+      return { dirtyTabs: { ...s.dirtyTabs, [tabId]: count } }
+    })
 }))

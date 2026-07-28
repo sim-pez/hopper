@@ -77,6 +77,14 @@ const api: Api = {
   system: {
     listSshHosts: () => ipcRenderer.invoke('system:listSshHosts'),
     platform: process.platform
+  },
+  app: {
+    onConfirmQuit: (cb: () => void) => {
+      const handler = () => cb()
+      ipcRenderer.on('app:confirm-quit', handler)
+      return () => ipcRenderer.removeListener('app:confirm-quit', handler)
+    },
+    respondQuit: (canQuit: boolean) => ipcRenderer.send('app:quit-response', canQuit)
   }
 }
 

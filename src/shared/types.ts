@@ -378,4 +378,12 @@ export interface Api {
     /** `process.platform`, so the renderer can leave room for macOS traffic lights. */
     platform: string
   }
+  app: {
+    /** Main asks whether it's safe to quit before it tears anything down, so the
+     *  renderer gets a chance to warn about unsaved row edits. Returns an
+     *  unsubscribe function. */
+    onConfirmQuit: (cb: () => void) => () => void
+    /** The renderer's answer to `onConfirmQuit` — quit proceeds only if `true`. */
+    respondQuit: (canQuit: boolean) => void
+  }
 }

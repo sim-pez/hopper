@@ -180,7 +180,16 @@ export function TableTabView({ tab }: Props): JSX.Element {
     return pk
   }
 
-  const pending = Object.keys(edits).length > 0 || deletes.size > 0
+  const editCount = Object.keys(edits).length + deletes.size
+  const pending = editCount > 0
+
+  // Reported to the store so the tab bar and app-quit confirmation know this
+  // tab has unsaved changes, without lifting `edits`/`deletes` themselves.
+  useEffect(() => {
+    const setTabDirty = useStore.getState().setTabDirty
+    setTabDirty(tab.id, editCount)
+    return () => setTabDirty(tab.id, 0)
+  }, [tab.id, editCount])
 
   // Stage a cell edit locally; save happens later via the Save button.
   const onCommitCell = async (rowIndex: number, cIndex: number, text: string): Promise<boolean> => {
@@ -377,18 +386,6 @@ export function TableTabView({ tab }: Props): JSX.Element {
             Read-only
           </span>
         )}
-        {data?.editable && pending && (
-          <div className="toolbar-group">
-            <button className="mini primary" onClick={onSave} disabled={saving}>
-              Save
-              <span className="count-badge">{Object.keys(edits).length + deletes.size}</span>
-            </button>
-            <button className="mini" onClick={discard} disabled={saving}>
-              Discard
-            </button>
-          </div>
-        )}
-
         <div className="spacer" />
 
         <div className="toolbar-group">
@@ -522,6 +519,17 @@ export function TableTabView({ tab }: Props): JSX.Element {
               onAnchorChange={setDetailRow}
               onToggleDetail={() => toggleRail('row')}
             />
+            {data.editable && pending && (
+              <div className="grid-float-actions">
+                <span className="count-badge">{editCount}</span>
+                <button className="mini" onClick={discard} disabled={saving}>
+                  Discard
+                </button>
+                <button className="mini primary" onClick={onSave} disabled={saving}>
+                  Save
+                </button>
+              </div>
+            )}
           </div>
           {rail === 'structure' && (
             <StructurePanel

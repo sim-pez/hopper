@@ -1,12 +1,21 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useStore } from '../store'
+import type { Tab } from '../store'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Table, X, Zap } from '../icons'
 
 export function TabBar(): JSX.Element {
-  const { tabs, activeTabId, setActiveTab, closeTab } = useStore()
+  const { tabs, activeTabId, setActiveTab, closeTab, dirtyTabs } = useStore()
   const listRef = useRef<HTMLDivElement>(null)
+  // A tab with unsaved edits confirms before it closes instead of closing outright.
+  const [closing, setClosing] = useState<Tab | null>(null)
 
   if (tabs.length === 0) return <div className="tabbar empty" />
+
+  const requestClose = (tab: Tab) => {
+    if (dirtyTabs[tab.id]) setClosing(tab)
+    else closeTab(tab.id)
+  }
 
   /** Left/Right move between tabs; the moved-to tab is activated and focused. */
   const onKeyDown = (e: React.KeyboardEvent, index: number) => {
@@ -30,12 +39,13 @@ export function TabBar(): JSX.Element {
             className={`tab ${active ? 'active' : ''}`}
             onClick={() => setActiveTab(t.id)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            onAuxClick={(e) => e.button === 1 && closeTab(t.id)}
+            onAuxClick={(e) => e.button === 1 && requestClose(t)}
           >
             {t.kind === 'table' ? <Table className="tab-icon" size={13} /> : <Zap className="tab-icon" size={13} />}
             <span className="tab-title" title={t.title}>
               {t.title}
             </span>
+            {!!dirtyTabs[t.id] && <span className="tab-dirty-dot" title="Unsaved changes" aria-hidden="true" />}
             <span
               className="tab-close"
               role="button"
@@ -44,7 +54,7 @@ export function TabBar(): JSX.Element {
               aria-label={`Close ${t.title}`}
               onClick={(e) => {
                 e.stopPropagation()
-                closeTab(t.id)
+                requestClose(t)
               }}
             >
               <X size={12} />
@@ -52,6 +62,19 @@ export function TabBar(): JSX.Element {
           </button>
         )
       })}
+      {closing && (
+        <ConfirmDialog
+          title="Unsaved changes"
+          message={`"${closing.title}" has unsaved row edits. Close the tab and discard them?`}
+          confirmLabel="Discard and close"
+          danger
+          onCancel={() => setClosing(null)}
+          onConfirm={() => {
+            closeTab(closing.id)
+            setClosing(null)
+          }}
+        />
+      )}
     </div>
   )
 }
