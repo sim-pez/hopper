@@ -1090,6 +1090,7 @@ table.grid td.cell {
   outline: none;
   cursor: default;
   vertical-align: middle;
+  position: relative;
 }
 tbody tr:hover .cell {
   background: rgba(255, 255, 255, 0.018);
@@ -1103,6 +1104,10 @@ tbody tr:hover .cell {
 }
 .cell.sel.anchor {
   box-shadow: inset var(--ring);
+}
+/* The header row can be selected too, when a drag extends up into it. */
+table.grid thead th.sel {
+  background: var(--sel);
 }
 .cell-text {
   display: inline-block;
@@ -1145,8 +1150,13 @@ tbody tr:hover .cell {
   border-radius: var(--r-sm);
   padding: 0 var(--space-1);
 }
+/* Overlays the td's own box exactly (its padding edge), rather than sitting
+   inset within the cell's padded content area — one ring the size of the
+   cell, not two nested squares. */
 .cell-input {
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  width: auto;
   min-width: 120px;
   border: none;
   border-radius: 0;
